@@ -85,7 +85,10 @@ export default function LoginPage() {
           {mode === 'login' ? 'Owner: create an account' : 'Have an account? Sign in'}
         </button>
         <p className="mt-4 text-xs text-slate-400 text-center">
-          Tenants: ask your landlord for your phone-number login.
+          Tenant?{' '}
+          <a href="/signup" className="text-blue-600 hover:underline">
+            Sign up with invite code
+          </a>
         </p>
       </div>
     </div>

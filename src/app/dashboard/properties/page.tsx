@@ -80,8 +80,16 @@ export default async function PropertiesPage() {
                 </span>
               </div>
 
-              <div className="flex items-center gap-3 mt-3 text-xs text-slate-600">
+              <div className="flex items-center justify-between gap-3 mt-3 text-xs text-slate-600">
                 <span>📅 Due {p.due_day_of_month} every month</span>
+                {p.invite_code && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-slate-400">Invite:</span>
+                    <code className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono text-xs tracking-wider">
+                      {p.invite_code}
+                    </code>
+                  </span>
+                )}
               </div>
 
               {isOwner && (
