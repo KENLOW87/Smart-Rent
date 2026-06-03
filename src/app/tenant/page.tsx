@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import LogoutButton from '../dashboard/LogoutButton';
+import PayButton from './PayButton';
 
 export default async function TenantHome() {
   const supabase = await createClient();
@@ -91,6 +92,16 @@ export default async function TenantHome() {
                         <p className="font-semibold text-sm">RM {Number(p.amount_paid).toFixed(0)}</p>
                       </div>
                     </div>
+
+                    {effectiveStatus !== 'paid' && (
+                      <PayButton paymentId={p.id}
+                        amount={Number(p.amount_due) - Number(p.amount_paid)} />
+                    )}
+                    {p.status === 'paid' && p.payment_channel === 'toyyibpay' && (
+                      <p className="text-[11px] text-emerald-600 text-center mt-3">
+                        ✓ Paid online via toyyibPay
+                      </p>
+                    )}
                   </div>
                 );
               })}
@@ -112,6 +123,7 @@ type PaymentRow = {
   status: string;
   period_year: number; period_month: number;
   due_date: string; amount_due: number; amount_paid: number;
+  payment_channel?: string | null;
 };
 
 function StatusPill({ status }: { status: string }) {
