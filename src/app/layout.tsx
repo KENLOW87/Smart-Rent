@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import InstallPrompt from './InstallPrompt';
 
 export const metadata: Metadata = {
   title: 'Smart Rent',
@@ -31,7 +32,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">{children}</body>
+      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
+        <InstallPrompt />
+        {children}
+      </body>
     </html>
   );
 }
