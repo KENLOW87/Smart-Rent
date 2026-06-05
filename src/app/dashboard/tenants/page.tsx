@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { createTenant, deactivateTenant, resetTenantPassword } from './actions';
+import { createTenant, deactivateTenant } from './actions';
 
 export default async function TenantsPage() {
   const supabase = await createClient();
@@ -27,15 +27,13 @@ export default async function TenantsPage() {
           </select>
           <input name="full_name" required placeholder="Tenant name"
             className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-          <input name="phone" required placeholder="Phone number"
+          <input name="phone" required placeholder="Phone number (this is their login)"
             className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-          <input name="password" type="text" placeholder="Login password (give to tenant)"
-            className="px-3 py-2 border border-slate-300 rounded-lg text-sm"
-            minLength={6} />
           <input name="move_in_date" type="date"
             className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
           <p className="text-xs text-slate-500">
-            Phone + password = tenant login. Leave password blank to track only.
+            The tenant signs in with just their phone number — no password to remember.
+            Give them the app link and their phone number.
           </p>
           <button className="bg-blue-600 text-white py-2.5 rounded-lg text-sm font-medium">
             Add tenant
@@ -61,11 +59,9 @@ export default async function TenantsPage() {
 
             <div className="mt-3 border-t border-slate-100 pt-3 flex items-center justify-between gap-2">
               {t.profile_id ? (
-                <form action={resetTenantPassword.bind(null, t.profile_id)} className="flex gap-1.5 flex-1">
-                  <input name="password" type="text" placeholder="New password"
-                    className="flex-1 px-2 py-1 border border-slate-300 rounded text-xs" />
-                  <button className="text-xs bg-slate-100 px-3 rounded hover:bg-slate-200">Reset</button>
-                </form>
+                <span className="text-xs text-slate-500">
+                  Login: <span className="font-mono text-slate-700">{t.phone}</span>
+                </span>
               ) : (
                 <span className="text-xs text-slate-400">No login</span>
               )}

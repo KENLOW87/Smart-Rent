@@ -3,21 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-
-const FAKE_DOMAIN = 'smartrent.local';
-
-function looksLikePhone(input: string) {
-  return /^[0-9+\-\s()]+$/.test(input.trim());
-}
-
-function normalize(input: string) {
-  const trimmed = input.trim();
-  if (looksLikePhone(trimmed)) {
-    const clean = trimmed.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-    return `${clean}@${FAKE_DOMAIN}`;
-  }
-  return trimmed.toLowerCase();
-}
+import { phoneToEmail, phoneToPassword, looksLikePhone } from '@/lib/tenant-auth';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -32,11 +18,21 @@ export default function LoginPage() {
     setBusy(true);
     setErr(null);
     const supabase = createClient();
-    const email = normalize(identifier);
+
+    const isPhone = mode === 'login' && looksLikePhone(identifier);
+    const email = isPhone ? phoneToEmail(identifier) : identifier.trim().toLowerCase();
+    const pw = isPhone ? (password || phoneToPassword(identifier)) : password;
+
+    if (!isPhone && !password) {
+      setBusy(false);
+      return setErr('Please enter your password.');
+    }
+
     const { error } =
       mode === 'login'
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password });
+        ? await supabase.auth.signInWithPassword({ email, password: pw })
+        : await supabase.auth.signUp({ email, password: pw });
+
     setBusy(false);
     if (error) return setErr(error.message);
     if (mode === 'signup') {
@@ -54,7 +50,7 @@ export default function LoginPage() {
         <h1 className="text-2xl font-semibold mb-1">Smart Rent</h1>
         <p className="text-sm text-slate-500 mb-6">
           {mode === 'login'
-            ? 'Sign in with your phone number or email'
+            ? 'Tenants: enter your phone number. Owners/agents: email + password.'
             : 'Create an owner / agent account (email)'}
         </p>
         <form onSubmit={submit} className="space-y-3">
@@ -66,30 +62,31 @@ export default function LoginPage() {
             className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
           />
           <input
-            type="password" required placeholder="Password" value={password}
+            type="password"
+            placeholder={mode === 'login' ? 'Password (tenants: leave blank)' : 'Password'}
+            value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
           />
           {err && <p className="text-sm text-red-600">{err}</p>}
           <button
             disabled={busy}
-            className="w-full bg-slate-900 text-white py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+            className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50"
           >
             {busy ? '...' : mode === 'login' ? 'Sign in' : 'Sign up'}
           </button>
         </form>
+        {mode === 'login' && (
+          <p className="mt-3 text-[11px] text-slate-400 text-center">
+            Tenant? Just type your phone number and tap Sign in.
+          </p>
+        )}
         <button
-          onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
+          onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setErr(null); }}
           className="w-full mt-4 text-xs text-slate-500 hover:text-slate-900"
         >
           {mode === 'login' ? 'Owner: create an account' : 'Have an account? Sign in'}
         </button>
-        <p className="mt-4 text-xs text-slate-400 text-center">
-          Tenant?{' '}
-          <a href="/signup" className="text-blue-600 hover:underline">
-            Sign up with invite code
-          </a>
-        </p>
       </div>
     </div>
   );
