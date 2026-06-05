@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
-import { generateMonth, recordPayment, sendReminderNow, approveProof, rejectProof } from './actions';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { recordPayment, sendReminderNow, approveProof, rejectProof } from './actions';
 import { displayStatus, daysLate, STATUS_META } from '@/lib/payment-status';
+import PeriodPicker from './PeriodPicker';
 
 export default async function PaymentsPage({
   searchParams,
@@ -9,12 +11,41 @@ export default async function PaymentsPage({
 }) {
   const sp = await searchParams;
   const now = new Date();
-  const year = Number(sp.y ?? now.getFullYear());
-  const month = Number(sp.m ?? now.getMonth() + 1);
+  const curYear = now.getFullYear();
+  const curMonth = now.getMonth() + 1;
+  const year = Number(sp.y ?? curYear);
+  const month = Number(sp.m ?? curMonth);
   const filter = sp.filter ?? 'all';
   const today = new Date().toISOString().slice(0, 10);
+  const years = Array.from({ length: 5 }, (_, i) => curYear - 3 + i);
 
   const supabase = await createClient();
+
+  // No Generate button — auto-create the current month's rows on load (idempotent).
+  if (year === curYear && month === curMonth) {
+    const admin = createAdminClient();
+    const { data: activeTenants } = await admin
+      .from('tenants')
+      .select('id, property_id, properties(rental_amount, due_day_of_month)')
+      .eq('active', true);
+    if (activeTenants?.length) {
+      type T = { id: string; property_id: string; properties: { rental_amount: number; due_day_of_month: number } | null };
+      const rows = (activeTenants as unknown as T[]).map((t) => {
+        const dueDay = t.properties?.due_day_of_month ?? 5;
+        const due = new Date(Date.UTC(year, month - 1, dueDay)).toISOString().slice(0, 10);
+        return {
+          tenant_id: t.id, property_id: t.property_id,
+          period_year: year, period_month: month,
+          amount_due: t.properties?.rental_amount ?? 0,
+          due_date: due, status: 'pending' as const,
+        };
+      });
+      await admin.from('payments').upsert(rows, {
+        onConflict: 'tenant_id,period_year,period_month', ignoreDuplicates: true,
+      });
+    }
+  }
+
   const { data: rawPayments } = await supabase
     .from('payments')
     .select('*, tenants(full_name, profile_id), properties(name), payment_proofs(id, status, ai_amount, ai_date, ai_reference, ai_bank, uploaded_at)')
@@ -36,22 +67,9 @@ export default async function PaymentsPage({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Payments</h2>
-        <form action={async () => { 'use server'; await generateMonth(year, month); }}>
-          <button className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg">
-            Generate
-          </button>
-        </form>
-      </div>
+      <h2 className="text-xl font-semibold">Payment History</h2>
 
-      <div className="flex items-center justify-between bg-white border border-slate-200 rounded-2xl p-3">
-        <a href={`?y=${month === 1 ? year - 1 : year}&m=${month === 1 ? 12 : month - 1}&filter=${filter}`}
-           className="text-sm text-slate-600 px-2">← Prev</a>
-        <p className="text-sm font-medium">{monthLabel}</p>
-        <a href={`?y=${month === 12 ? year + 1 : year}&m=${month === 12 ? 1 : month + 1}&filter=${filter}`}
-           className="text-sm text-slate-600 px-2">Next →</a>
-      </div>
+      <PeriodPicker year={year} month={month} filter={filter} years={years} />
 
       <div className="flex gap-2 overflow-x-auto -mx-1 px-1">
         {chips.map((c) => (
