@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { recordPayment, sendReminderNow, approveProof, rejectProof } from './actions';
+import { approveProof, rejectProof } from './actions';
 import { displayStatus, daysLate, STATUS_META } from '@/lib/payment-status';
 import PeriodPicker from './PeriodPicker';
 
@@ -172,35 +172,12 @@ export default async function PaymentsPage({
                 </div>
               )}
 
-              <div className="mt-3 border-t border-slate-100 pt-3">
-                <form action={recordPayment.bind(null, p.id)} className="space-y-2">
-                  <div className="flex gap-2">
-                    <input name="amount" type="number" step="0.01"
-                      defaultValue={p.amount_paid || ''}
-                      placeholder={`RM ${p.amount_due}`}
-                      className="flex-1 min-w-0 px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-                    <input name="paid_date" type="date" defaultValue={today} title="Date paid"
-                      className="w-36 px-2 py-2 border border-slate-300 rounded-lg text-xs" />
-                  </div>
-                  <button className="w-full text-sm bg-blue-600 text-white py-2 rounded-lg font-medium">
-                    Save payment
-                  </button>
-                </form>
-                {p.tenants?.profile_id && !fullyPaid && (
-                  <form action={async () => { 'use server'; await sendReminderNow(p.id); }} className="mt-2">
-                    <button className="w-full text-xs text-blue-600 border border-blue-200 py-1.5 rounded-lg hover:bg-blue-50">
-                      🔔 Send reminder
-                    </button>
-                  </form>
-                )}
-              </div>
             </div>
           );
         })}
         {!payments?.length && (
           <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-sm text-slate-500">
-            No payments for {monthLabel}.<br />
-            Tap <b>Generate</b> to create this month&apos;s rows.
+            No payments recorded for {monthLabel}.
           </div>
         )}
       </div>
