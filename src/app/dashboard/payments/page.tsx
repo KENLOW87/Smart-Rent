@@ -69,6 +69,7 @@ export default async function PaymentsPage({
           id: string; due_date: string; amount_due: number; amount_paid: number;
           status: string; tenants: { full_name: string; profile_id: string | null } | null;
           properties: { name: string } | null;
+          payment_channel?: string | null; toyyibpay_ref_no?: string | null;
           payment_proofs?: Array<{ id: string; status: string; ai_amount: number | null; ai_date: string | null; ai_reference: string | null; ai_bank: string | null }>;
         }) => {
           const proof = p.payment_proofs?.[p.payment_proofs.length - 1];
@@ -102,6 +103,15 @@ export default async function PaymentsPage({
                   <p className="font-semibold text-base">{p.due_date}</p>
                 </div>
               </div>
+
+              {p.status === 'paid' && p.payment_channel === 'toyyibpay' && (
+                <div className="mt-3 rounded-xl p-3 border bg-emerald-50 border-emerald-200 text-xs">
+                  <p className="font-semibold text-emerald-700">💳 Paid online via toyyibPay (FPX)</p>
+                  {p.toyyibpay_ref_no && (
+                    <p className="text-[10px] text-slate-500 mt-0.5">Invoice ref: {p.toyyibpay_ref_no}</p>
+                  )}
+                </div>
+              )}
 
               {proof && (
                 <div className={`mt-3 rounded-xl p-3 border text-xs ${
