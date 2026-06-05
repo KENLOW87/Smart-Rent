@@ -43,19 +43,6 @@ export default async function PropertiesPage() {
                 placeholder="Due day"
                 className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
             </div>
-            <div className="space-y-2 border-t border-slate-100 pt-3">
-              <p className="text-xs font-medium text-slate-700">
-                Bank account (where tenant transfers rent — used by AI receipt verification)
-              </p>
-              <input name="account_holder" placeholder="Account holder name"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-              <div className="grid grid-cols-2 gap-2">
-                <input name="bank_name" placeholder="Bank (e.g. Maybank)"
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-                <input name="bank_account" placeholder="Account number"
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-              </div>
-            </div>
             <textarea name="notes" placeholder="Notes (optional)" rows={2}
               className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
             <button className="bg-blue-600 text-white py-2.5 rounded-lg text-sm font-medium">
