@@ -10,10 +10,10 @@ function waLink(name: string, phone: string, property: string) {
   const digits = phone.replace(/\D/g, '');
   const intl = digits.startsWith('60') ? digits : digits.startsWith('0') ? '60' + digits.slice(1) : '60' + digits;
   const msg =
-    `Hi ${name} 👋 Here's your Smart Rent app for ${property} — check & pay your rent:\n` +
-    `👉 ${site}\n` +
+    `Hi ${name} \u{1F44B} Here's your Smart Rent app for ${property} \u{2014} check & pay your rent:\n` +
+    `\u{1F449} ${site}\n` +
     `Login: your phone no. ${phone} (no password)\n` +
-    `Tap the link, then "Install" to add it to your phone 📲`;
+    `Tap the link, then "Install" to add it to your phone \u{1F4F2}`;
   return `https://wa.me/${intl}?text=${encodeURIComponent(msg)}`;
 }
 

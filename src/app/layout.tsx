@@ -3,9 +3,18 @@ import './globals.css';
 import InstallPrompt from './InstallPrompt';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://smart-rent-wheat.vercel.app'),
   title: 'Smart Rent',
   description: 'Rental property management for landlords',
   manifest: '/manifest.webmanifest',
+  openGraph: {
+    title: 'Smart Rent',
+    description: 'Check your rent and pay online.',
+    url: '/',
+    siteName: 'Smart Rent',
+    type: 'website',
+    images: [{ url: '/icons/maskable-512.png', width: 512, height: 512, alt: 'Smart Rent' }],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
