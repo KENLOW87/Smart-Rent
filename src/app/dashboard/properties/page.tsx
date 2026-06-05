@@ -4,6 +4,19 @@ import {
   addTenantToProperty, moveOutTenant,
 } from './actions';
 
+// Build a WhatsApp click-to-chat link with a prefilled invite message.
+function waLink(name: string, phone: string, property: string) {
+  const site = process.env.NEXT_PUBLIC_SITE_URL || 'https://smart-rent-wheat.vercel.app';
+  const digits = phone.replace(/\D/g, '');
+  const intl = digits.startsWith('60') ? digits : digits.startsWith('0') ? '60' + digits.slice(1) : '60' + digits;
+  const msg =
+    `Hi ${name} 👋 Here's your Smart Rent app for ${property} — check & pay your rent:\n` +
+    `👉 ${site}\n` +
+    `Login: your phone no. ${phone} (no password)\n` +
+    `Tap the link, then "Install" to add it to your phone 📲`;
+  return `https://wa.me/${intl}?text=${encodeURIComponent(msg)}`;
+}
+
 export default async function PropertiesPage() {
   const supabase = await createClient();
 
@@ -89,18 +102,25 @@ export default async function PropertiesPage() {
               {/* Tenant */}
               <div className="mt-3 bg-slate-50 rounded-xl p-3">
                 {tenant ? (
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[10px] uppercase text-slate-500">Tenant</p>
-                      <p className="text-sm font-medium">{tenant.full_name}</p>
-                      <p className="text-[11px] text-slate-500">
-                        Login: <span className="font-mono text-slate-700">{tenant.phone}</span>
-                      </p>
-                    </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-slate-500">Tenant</p>
+                    <p className="text-sm font-medium">{tenant.full_name}</p>
+                    <p className="text-[11px] text-slate-500">
+                      Login: <span className="font-mono text-slate-700">{tenant.phone}</span>
+                    </p>
                     {isOwner && (
-                      <form action={async () => { 'use server'; await moveOutTenant(tenant.id); }}>
-                        <button className="text-xs text-red-600 hover:underline">Move out</button>
-                      </form>
+                      <div className="flex items-center gap-2 mt-3">
+                        {tenant.phone && (
+                          <a href={waLink(tenant.full_name, tenant.phone, p.name)}
+                            target="_blank" rel="noopener noreferrer"
+                            className="flex-1 inline-flex items-center justify-center gap-1 text-xs bg-emerald-500 text-white py-2 rounded-lg font-medium">
+                            💬 WhatsApp app link
+                          </a>
+                        )}
+                        <form action={async () => { 'use server'; await moveOutTenant(tenant.id); }}>
+                          <button className="text-xs text-red-600 hover:underline px-2 py-2">Move out</button>
+                        </form>
+                      </div>
                     )}
                   </div>
                 ) : isOwner ? (
