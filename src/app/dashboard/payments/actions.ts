@@ -53,9 +53,16 @@ export async function recordPayment(paymentId: string, formData: FormData) {
     amount >= Number(payment.amount_due) ? 'paid' :
     amount > 0 ? 'partial' : 'pending';
 
+  // Optional "date paid" (defaults to today). Stamped at noon UTC so the date
+  // is unambiguous when compared to the due date (used for Paid vs Paid-Late).
+  const paidDateInput = String(formData.get('paid_date') || '').trim();
+  const paidAt = amount > 0
+    ? (paidDateInput ? new Date(`${paidDateInput}T12:00:00Z`).toISOString() : new Date().toISOString())
+    : null;
+
   const { error } = await supabase.from('payments').update({
     amount_paid: amount,
-    paid_at: amount > 0 ? new Date().toISOString() : null,
+    paid_at: paidAt,
     status,
     notes: String(formData.get('notes') || '') || null,
     updated_at: new Date().toISOString(),

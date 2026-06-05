@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import LogoutButton from '../dashboard/LogoutButton';
 import PayButton from './PayButton';
+import { displayStatus, daysLate, STATUS_META } from '@/lib/payment-status';
 
 export default async function TenantHome() {
   const supabase = await createClient();
@@ -45,7 +46,6 @@ export default async function TenantHome() {
           </div>
         ) : (
           <>
-            {/* Property summary */}
             <section className="rounded-2xl p-6 text-white bg-gradient-to-br from-blue-600 to-indigo-700 shadow">
               <p className="text-xs uppercase tracking-wider text-blue-100">Your rental</p>
               <p className="text-xl font-bold mt-1">{tenant.properties?.name}</p>
@@ -64,12 +64,13 @@ export default async function TenantHome() {
               </div>
             </section>
 
-            {/* Payments + upload */}
             <section className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-700 px-1">Payment history</h3>
               {payments?.map((p: PaymentRow) => {
-                const overdue = p.status === 'pending' && p.due_date < today;
-                const effectiveStatus = overdue ? 'late' : p.status;
+                const dstatus = displayStatus(p, today);
+                const meta = STATUS_META[dstatus];
+                const lateDays = dstatus === 'paid_late' && p.paid_at ? daysLate(p.paid_at, p.due_date) : 0;
+                const fullyPaid = dstatus === 'paid' || dstatus === 'paid_late';
                 return (
                   <div key={p.id} className="bg-white border border-slate-200 rounded-2xl p-4">
                     <div className="flex justify-between items-start">
@@ -79,7 +80,13 @@ export default async function TenantHome() {
                         </h4>
                         <p className="text-xs text-slate-500 mt-0.5">Due {p.due_date}</p>
                       </div>
-                      <StatusPill status={effectiveStatus} />
+                      {dstatus !== 'upcoming' ? (
+                        <span className={`text-[10px] px-2 py-1 rounded-full font-medium ${meta.pill}`}>
+                          {meta.label}{lateDays ? ` · ${lateDays}d late` : ''}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-400">Not due yet</span>
+                      )}
                     </div>
 
                     <div className="mt-3 bg-slate-50 rounded-xl p-3 text-xs grid grid-cols-2 gap-3">
@@ -93,11 +100,11 @@ export default async function TenantHome() {
                       </div>
                     </div>
 
-                    {effectiveStatus !== 'paid' && (
+                    {!fullyPaid && (
                       <PayButton paymentId={p.id}
                         amount={Number(p.amount_due) - Number(p.amount_paid)} />
                     )}
-                    {p.status === 'paid' && p.payment_channel === 'toyyibpay' && (
+                    {fullyPaid && p.payment_channel === 'toyyibpay' && (
                       <p className="text-[11px] text-emerald-600 text-center mt-3">
                         ✓ Paid online via toyyibPay
                       </p>
@@ -122,20 +129,6 @@ type PaymentRow = {
   id: string;
   status: string;
   period_year: number; period_month: number;
-  due_date: string; amount_due: number; amount_paid: number;
+  due_date: string; amount_due: number; amount_paid: number; paid_at: string | null;
   payment_channel?: string | null;
 };
-
-function StatusPill({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    paid: 'bg-emerald-100 text-emerald-700',
-    pending: 'bg-amber-100 text-amber-700',
-    late: 'bg-red-100 text-red-700',
-    partial: 'bg-blue-100 text-blue-700',
-  };
-  return (
-    <span className={`text-[10px] px-2 py-1 rounded-full font-medium capitalize ${styles[status] ?? ''}`}>
-      {status === 'late' ? 'Overdue' : status}
-    </span>
-  );
-}

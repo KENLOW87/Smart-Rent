@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { generateMonth, recordPayment, sendReminderNow, approveProof, rejectProof } from './actions';
+import { displayStatus, daysLate, STATUS_META } from '@/lib/payment-status';
 
 export default async function PaymentsPage({
   searchParams,
@@ -11,6 +12,7 @@ export default async function PaymentsPage({
   const year = Number(sp.y ?? now.getFullYear());
   const month = Number(sp.m ?? now.getMonth() + 1);
   const filter = sp.filter ?? 'all';
+  const today = new Date().toISOString().slice(0, 10);
 
   const supabase = await createClient();
   const { data: rawPayments } = await supabase
@@ -19,18 +21,18 @@ export default async function PaymentsPage({
     .eq('period_year', year).eq('period_month', month)
     .order('due_date');
 
-  const todayStr = new Date().toISOString().slice(0, 10);
   const payments = (rawPayments ?? []).filter((p) => {
     if (filter === 'all') return true;
-    const overdue = p.status === 'pending' && p.due_date < todayStr;
-    if (filter === 'paid') return p.status === 'paid';
-    if (filter === 'overdue') return p.status === 'late' || overdue;
-    if (filter === 'pending') return (p.status === 'pending' && !overdue) || p.status === 'partial';
-    return true;
+    return displayStatus(p, today) === filter;
   });
 
   const monthLabel = new Date(year, month - 1).toLocaleString('en', { month: 'long', year: 'numeric' });
-  const today = new Date().toISOString().slice(0, 10);
+  const chips: Array<{ key: string; label: string }> = [
+    { key: 'all', label: 'All' },
+    { key: 'paid', label: 'Paid' },
+    { key: 'paid_late', label: 'Paid (Late)' },
+    { key: 'overdue', label: 'Overdue' },
+  ];
 
   return (
     <div className="space-y-4">
@@ -52,35 +54,31 @@ export default async function PaymentsPage({
       </div>
 
       <div className="flex gap-2 overflow-x-auto -mx-1 px-1">
-        {(['all', 'paid', 'pending', 'overdue'] as const).map((f) => (
-          <a key={f} href={`?y=${year}&m=${month}&filter=${f}`}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium border whitespace-nowrap capitalize ${
-              filter === f
+        {chips.map((c) => (
+          <a key={c.key} href={`?y=${year}&m=${month}&filter=${c.key}`}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border whitespace-nowrap ${
+              filter === c.key
                 ? 'bg-slate-900 text-white border-slate-900'
                 : 'bg-white text-slate-600 border-slate-200'
             }`}>
-            {f}
+            {c.label}
           </a>
         ))}
       </div>
 
       <div className="space-y-3">
         {payments?.map((p: {
-          id: string; due_date: string; amount_due: number; amount_paid: number;
+          id: string; due_date: string; amount_due: number; amount_paid: number; paid_at: string | null;
           status: string; tenants: { full_name: string; profile_id: string | null } | null;
           properties: { name: string } | null;
           payment_channel?: string | null; toyyibpay_ref_no?: string | null;
           payment_proofs?: Array<{ id: string; status: string; ai_amount: number | null; ai_date: string | null; ai_reference: string | null; ai_bank: string | null }>;
         }) => {
           const proof = p.payment_proofs?.[p.payment_proofs.length - 1];
-          const overdue = p.status === 'pending' && p.due_date < today;
-          const effectiveStatus = overdue ? 'late' : p.status;
-          const statusColor = {
-            paid: 'bg-emerald-100 text-emerald-700',
-            partial: 'bg-amber-100 text-amber-700',
-            pending: 'bg-slate-100 text-slate-700',
-            late: 'bg-red-100 text-red-700',
-          }[effectiveStatus] ?? '';
+          const dstatus = displayStatus(p, today);
+          const meta = STATUS_META[dstatus];
+          const lateDays = dstatus === 'paid_late' && p.paid_at ? daysLate(p.paid_at, p.due_date) : 0;
+          const fullyPaid = dstatus === 'paid' || dstatus === 'paid_late';
           return (
             <div key={p.id} className="bg-white border border-slate-200 rounded-2xl p-4">
               <div className="flex justify-between items-start">
@@ -88,9 +86,13 @@ export default async function PaymentsPage({
                   <h3 className="font-semibold">{p.tenants?.full_name}</h3>
                   <p className="text-xs text-slate-500 mt-0.5">{p.properties?.name}</p>
                 </div>
-                <span className={`text-[10px] px-2 py-1 rounded-full capitalize ${statusColor}`}>
-                  {effectiveStatus}
-                </span>
+                {dstatus !== 'upcoming' ? (
+                  <span className={`text-[10px] px-2 py-1 rounded-full font-medium ${meta.pill}`}>
+                    {meta.label}{lateDays ? ` · ${lateDays}d` : ''}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-slate-400">Due {p.due_date}</span>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3 mt-3 text-xs">
@@ -104,7 +106,7 @@ export default async function PaymentsPage({
                 </div>
               </div>
 
-              {p.status === 'paid' && p.payment_channel === 'toyyibpay' && (
+              {fullyPaid && p.payment_channel === 'toyyibpay' && (
                 <div className="mt-3 rounded-xl p-3 border bg-emerald-50 border-emerald-200 text-xs">
                   <p className="font-semibold text-emerald-700">💳 Paid online via toyyibPay (FPX)</p>
                   {p.toyyibpay_ref_no && (
@@ -135,9 +137,6 @@ export default async function PaymentsPage({
                       {proof.ai_bank && ` · ${proof.ai_bank}`}
                     </p>
                   )}
-                  {proof.ai_reference && (
-                    <p className="text-[10px] text-slate-500 mt-0.5">Ref: {proof.ai_reference}</p>
-                  )}
                   {(proof.status === 'needs_review' || proof.status === 'mismatch') && (
                     <div className="flex gap-2 mt-2">
                       <form action={async () => { 'use server'; await approveProof(proof.id, p.id); }} className="flex-1">
@@ -156,14 +155,20 @@ export default async function PaymentsPage({
               )}
 
               <div className="mt-3 border-t border-slate-100 pt-3">
-                <form action={recordPayment.bind(null, p.id)} className="flex gap-2">
-                  <input name="amount" type="number" step="0.01"
-                    defaultValue={p.amount_paid || ''}
-                    placeholder={`RM ${p.amount_due}`}
-                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-                  <button className="text-sm bg-blue-600 text-white px-4 rounded-lg">Save</button>
+                <form action={recordPayment.bind(null, p.id)} className="space-y-2">
+                  <div className="flex gap-2">
+                    <input name="amount" type="number" step="0.01"
+                      defaultValue={p.amount_paid || ''}
+                      placeholder={`RM ${p.amount_due}`}
+                      className="flex-1 min-w-0 px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                    <input name="paid_date" type="date" defaultValue={today} title="Date paid"
+                      className="w-36 px-2 py-2 border border-slate-300 rounded-lg text-xs" />
+                  </div>
+                  <button className="w-full text-sm bg-blue-600 text-white py-2 rounded-lg font-medium">
+                    Save payment
+                  </button>
                 </form>
-                {p.tenants?.profile_id && effectiveStatus !== 'paid' && (
+                {p.tenants?.profile_id && !fullyPaid && (
                   <form action={async () => { 'use server'; await sendReminderNow(p.id); }} className="mt-2">
                     <button className="w-full text-xs text-blue-600 border border-blue-200 py-1.5 rounded-lg hover:bg-blue-50">
                       🔔 Send reminder
