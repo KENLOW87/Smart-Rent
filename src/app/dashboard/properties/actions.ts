@@ -6,10 +6,14 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { phoneToEmail, phoneToPassword } from '@/lib/tenant-auth';
 
 // Create a phone-based tenant login and link it to a property.
+// Idempotent: if the phone was already registered (e.g. a half-finished earlier
+// attempt), reuse that login instead of crashing.
 async function createTenantForProperty(propertyId: string, fullName: string, phone: string) {
   const admin = createAdminClient();
   const email = phoneToEmail(phone);
   const password = phoneToPassword(phone);
+
+  let profileId: string | null = null;
 
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
     email,
@@ -17,19 +21,34 @@ async function createTenantForProperty(propertyId: string, fullName: string, pho
     email_confirm: true,
     user_metadata: { full_name: fullName, phone },
   });
+
   if (createErr) {
-    if (createErr.message.toLowerCase().includes('already')) {
-      throw new Error(`Phone ${phone} is already registered to a tenant.`);
+    // Most likely "already registered" — find the existing profile by phone and reuse it.
+    const { data: existing } = await admin
+      .from('profiles').select('id').eq('phone', phone).maybeSingle();
+    if (existing?.id) {
+      profileId = existing.id;
+    } else {
+      throw new Error(`Could not create tenant login: ${createErr.message}`);
     }
-    throw createErr;
+  } else {
+    profileId = created.user?.id ?? null;
   }
-  const profileId = created.user?.id ?? null;
-  if (profileId) {
-    await admin.from('profiles')
-      .update({ full_name: fullName, phone, role: 'tenant' })
-      .eq('id', profileId);
-  }
-  await admin.from('tenants').insert({
+  if (!profileId) throw new Error('Could not determine the tenant login.');
+
+  // Ensure the profile reflects this tenant.
+  await admin.from('profiles')
+    .update({ full_name: fullName, phone, role: 'tenant' })
+    .eq('id', profileId);
+
+  // Avoid a duplicate active tenant for the same property.
+  const { data: existingTenant } = await admin
+    .from('tenants').select('id')
+    .eq('profile_id', profileId).eq('property_id', propertyId).eq('active', true)
+    .maybeSingle();
+  if (existingTenant) return;
+
+  const { error: insErr } = await admin.from('tenants').insert({
     property_id: propertyId,
     profile_id: profileId,
     full_name: fullName,
@@ -37,6 +56,7 @@ async function createTenantForProperty(propertyId: string, fullName: string, pho
     email: null,
     active: true,
   });
+  if (insErr) throw new Error(`Could not save tenant: ${insErr.message}`);
 }
 
 export async function createProperty(formData: FormData) {
