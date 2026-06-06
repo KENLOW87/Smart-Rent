@@ -26,6 +26,7 @@ export default async function TenantHome() {
     .from('payments')
     .select('*')
     .eq('tenant_id', tenant?.id ?? '00000000-0000-0000-0000-000000000000')
+    .eq('hidden', false)
     .order('period_year', { ascending: false })
     .order('period_month', { ascending: false })
     .limit(12);

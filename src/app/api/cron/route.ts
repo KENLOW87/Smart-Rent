@@ -53,7 +53,8 @@ export async function GET(req: Request) {
   const { data: unpaid } = await supabase
     .from('payments')
     .select('*, tenants(full_name, profiles:profile_id(telegram_chat_id)), properties(name)')
-    .in('status', ['pending', 'partial', 'late']);
+    .in('status', ['pending', 'partial', 'late'])
+    .eq('hidden', false);
 
   let sent = 0;
 

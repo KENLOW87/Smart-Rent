@@ -128,7 +128,9 @@ export async function deletePayment(paymentId: string) {
   const paths = (proofs ?? []).map((p) => p.file_path).filter(Boolean);
   if (paths.length) await admin.storage.from('payment-proofs').remove(paths);
   await admin.from('payment_proofs').delete().eq('payment_id', paymentId);
-  await admin.from('payments').delete().eq('id', paymentId);
+  // Soft-delete: mark hidden so the page auto-generate AND the daily cron won't
+  // recreate this current-month row. The delete now actually sticks.
+  await admin.from('payments').update({ hidden: true }).eq('id', paymentId);
 
   revalidatePath('/dashboard/payments');
   revalidatePath('/dashboard');

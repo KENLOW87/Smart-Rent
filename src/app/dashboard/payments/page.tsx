@@ -62,6 +62,7 @@ export default async function PaymentsPage({
     .from('payments')
     .select('*, tenants(full_name, profile_id, phone), properties(name)')
     .eq('period_year', year).eq('period_month', month)
+    .eq('hidden', false)
     .order('due_date');
 
   const payments = (rawPayments ?? []).filter((p) => filter === 'all' || displayStatus(p, today) === filter);

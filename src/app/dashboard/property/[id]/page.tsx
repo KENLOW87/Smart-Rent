@@ -18,7 +18,7 @@ export default async function PropertyDetail({ params }: { params: Promise<{ id:
     .eq('property_id', id).eq('active', true).maybeSingle();
 
   const { data: payments } = await supabase
-    .from('payments').select('*').eq('property_id', id)
+    .from('payments').select('*').eq('property_id', id).eq('hidden', false)
     .order('period_year', { ascending: false })
     .order('period_month', { ascending: false })
     .limit(24);

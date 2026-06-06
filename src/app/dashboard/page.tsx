@@ -12,7 +12,7 @@ export default async function DashboardHome() {
   const [{ data: properties }, { data: tenants }, { data: payments }] = await Promise.all([
     supabase.from('properties').select('id, name, rental_amount, due_day_of_month'),
     supabase.from('tenants').select('id, property_id, full_name, profile_id, active').eq('active', true),
-    supabase.from('payments').select('*').eq('period_year', year).eq('period_month', month),
+    supabase.from('payments').select('*').eq('period_year', year).eq('period_month', month).eq('hidden', false),
   ]);
 
   const { data: { user } } = await supabase.auth.getUser();
