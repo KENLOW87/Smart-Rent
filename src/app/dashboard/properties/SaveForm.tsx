@@ -1,11 +1,12 @@
 'use client';
 
-import { useActionState, type ReactNode } from 'react';
+import { useActionState, useEffect, useRef, type ReactNode } from 'react';
 
 type Result = { ok?: boolean; error?: string };
 
-// Wraps an edit form so the owner gets clear "Saving…" / "✓ Saved" feedback,
-// instead of the form silently collapsing with no confirmation.
+// Wraps an edit form so the owner gets clear "Saving…" / "✓ Saved" feedback.
+// After a successful save it briefly shows "✓ Saved" then auto-collapses the
+// surrounding <details> so the card shrinks back down.
 export default function SaveForm({
   action,
   children,
@@ -16,8 +17,19 @@ export default function SaveForm({
   label?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, {});
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (!state.ok) return;
+    const t = setTimeout(() => {
+      const details = formRef.current?.closest('details');
+      if (details) details.open = false;
+    }, 900);
+    return () => clearTimeout(t);
+  }, [state.ok]);
+
   return (
-    <form action={formAction} className="grid gap-2 mt-2">
+    <form ref={formRef} action={formAction} className="grid gap-2 mt-2">
       {children}
       <button
         disabled={pending}
