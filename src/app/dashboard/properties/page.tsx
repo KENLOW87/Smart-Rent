@@ -4,6 +4,7 @@ import {
   createProperty, deleteProperty, addTenantToProperty, moveOutTenant,
   setPropertyOwner, editProperty, editTenant,
 } from './actions';
+import SaveForm from './SaveForm';
 
 // WhatsApp click-to-chat link with a prefilled tenant invite message.
 function waLink(name: string, phone: string, property: string) {
@@ -139,13 +140,12 @@ export default async function PropertiesPage() {
                     {isOwner && (
                       <details className="mt-2">
                         <summary className="text-xs text-blue-600 cursor-pointer">Edit tenant name / phone</summary>
-                        <form action={editTenant.bind(null, tenant.id)} className="grid gap-2 mt-2">
+                        <SaveForm action={editTenant.bind(null, tenant.id)} label="Save tenant">
                           <input name="tenant_name" defaultValue={tenant.full_name} required placeholder="Tenant name"
                             className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
                           <input name="tenant_phone" defaultValue={tenant.phone ?? ''} required placeholder="Tenant phone (login)"
                             className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-                          <button className="text-xs bg-slate-900 text-white py-2 rounded-lg">Save tenant</button>
-                        </form>
+                        </SaveForm>
                       </details>
                     )}
                   </div>
@@ -168,7 +168,7 @@ export default async function PropertiesPage() {
               {isOwner && (
                 <details className="mt-3 border-t border-slate-100 pt-3">
                   <summary className="text-xs text-slate-500 cursor-pointer">✏️ Edit property</summary>
-                  <form action={editProperty.bind(null, p.id)} className="grid gap-2 mt-2">
+                  <SaveForm action={editProperty.bind(null, p.id)} label="Save changes">
                     <input name="name" defaultValue={p.name} required placeholder="Property name"
                       className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
                     <div className="grid grid-cols-2 gap-2">
@@ -177,8 +177,7 @@ export default async function PropertiesPage() {
                       <input name="due_day_of_month" type="number" min="1" max="28" defaultValue={p.due_day_of_month} required placeholder="Due day"
                         className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
                     </div>
-                    <button className="text-xs bg-slate-900 text-white py-2 rounded-lg">Save changes</button>
-                  </form>
+                  </SaveForm>
                 </details>
               )}
 

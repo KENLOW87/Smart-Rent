@@ -120,41 +120,71 @@ export async function setPropertyOwner(propertyId: string, formData: FormData) {
   revalidatePath('/dashboard');
 }
 
-export async function editProperty(propertyId: string, formData: FormData) {
-  const supabase = await createClient();
-  const { error } = await supabase.from('properties').update({
-    name: String(formData.get('name')),
-    rental_amount: Number(formData.get('rental_amount')),
-    due_day_of_month: Number(formData.get('due_day_of_month')),
-  }).eq('id', propertyId);
-  if (error) throw error;
-  revalidatePath('/dashboard/properties');
-  revalidatePath('/dashboard');
+export async function editProperty(
+  propertyId: string,
+  _prev: { ok?: boolean; error?: string },
+  formData: FormData,
+): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const name = String(formData.get('name') || '').trim();
+    const rent = Number(formData.get('rental_amount'));
+    const dueDay = Number(formData.get('due_day_of_month'));
+    if (!name) return { error: 'Property name is required.' };
+
+    const { error } = await supabase.from('properties')
+      .update({ name, rental_amount: rent, due_day_of_month: dueDay })
+      .eq('id', propertyId);
+    if (error) return { error: error.message };
+
+    // Keep unpaid bills in sync with the new rent (paid months are left as-is).
+    const admin = createAdminClient();
+    await admin.from('payments')
+      .update({ amount_due: rent })
+      .eq('property_id', propertyId)
+      .neq('status', 'paid');
+
+    revalidatePath('/dashboard/properties');
+    revalidatePath('/dashboard');
+    revalidatePath('/dashboard/payments');
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Could not save changes.' };
+  }
 }
 
 // Edit a tenant's name / phone. Changing the phone also updates their login.
-export async function editTenant(tenantId: string, formData: FormData) {
-  const admin = createAdminClient();
-  const fullName = String(formData.get('tenant_name') || '').trim();
-  const phone = String(formData.get('tenant_phone') || '').trim();
-  if (!fullName || !phone) throw new Error('Tenant name and phone are required');
+export async function editTenant(
+  tenantId: string,
+  _prev: { ok?: boolean; error?: string },
+  formData: FormData,
+): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const admin = createAdminClient();
+    const fullName = String(formData.get('tenant_name') || '').trim();
+    const phone = String(formData.get('tenant_phone') || '').trim();
+    if (!fullName || !phone) return { error: 'Tenant name and phone are required.' };
 
-  const { data: t } = await admin.from('tenants')
-    .select('id, profile_id, phone').eq('id', tenantId).single();
-  if (!t) throw new Error('Tenant not found');
+    const { data: t } = await admin.from('tenants')
+      .select('id, profile_id, phone').eq('id', tenantId).single();
+    if (!t) return { error: 'Tenant not found.' };
 
-  await admin.from('tenants').update({ full_name: fullName, phone }).eq('id', tenantId);
+    await admin.from('tenants').update({ full_name: fullName, phone }).eq('id', tenantId);
 
-  if (t.profile_id) {
-    await admin.from('profiles').update({ full_name: fullName, phone }).eq('id', t.profile_id);
-    if (phone !== t.phone) {
-      await admin.auth.admin.updateUserById(t.profile_id, {
-        email: phoneToEmail(phone),
-        password: phoneToPassword(phone),
-        email_confirm: true,
-      });
+    if (t.profile_id) {
+      await admin.from('profiles').update({ full_name: fullName, phone }).eq('id', t.profile_id);
+      if (phone !== t.phone) {
+        await admin.auth.admin.updateUserById(t.profile_id, {
+          email: phoneToEmail(phone),
+          password: phoneToPassword(phone),
+          email_confirm: true,
+        });
+      }
     }
+    revalidatePath('/dashboard/properties');
+    revalidatePath('/dashboard');
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Could not save tenant.' };
   }
-  revalidatePath('/dashboard/properties');
-  revalidatePath('/dashboard');
 }
