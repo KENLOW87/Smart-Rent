@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { displayStatus, daysLate, STATUS_META } from '@/lib/payment-status';
 import PeriodPicker from './PeriodPicker';
+import DeletePaymentButton from './DeletePaymentButton';
 import { getSlipUrls } from '@/lib/slips';
 
 // WhatsApp the tenant: a reminder if rent is outstanding, a thank-you if settled.
@@ -151,6 +152,9 @@ export default async function PaymentsPage({
                     💬 WhatsApp
                   </a>
                 )}
+              </div>
+              <div className="mt-2 text-right">
+                <DeletePaymentButton paymentId={p.id} />
               </div>
             </div>
           );
