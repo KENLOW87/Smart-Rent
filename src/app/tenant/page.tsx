@@ -27,6 +27,13 @@ export default async function TenantHome() {
 
   const today = new Date().toISOString().slice(0, 10);
 
+  const bank = {
+    name: process.env.BANK_NAME || '',
+    holder: process.env.BANK_ACCOUNT_NAME || '',
+    account: process.env.BANK_ACCOUNT_NO || '',
+  };
+  const hasBank = Boolean(bank.name && bank.account);
+
   return (
     <div className="min-h-screen max-w-md mx-auto bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-5 py-4 flex justify-between items-center sticky top-0 z-10">
@@ -89,26 +96,47 @@ export default async function TenantHome() {
                       )}
                     </div>
 
-                    <div className="mt-3 bg-slate-50 rounded-xl p-3 text-xs grid grid-cols-2 gap-3">
-                      <div>
-                        <p className="text-slate-500 uppercase text-[10px]">Rent</p>
-                        <p className="font-semibold text-sm">RM {Number(p.amount_due).toFixed(0)}</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-500 uppercase text-[10px]">Paid</p>
-                        <p className="font-semibold text-sm">RM {Number(p.amount_paid).toFixed(0)}</p>
-                      </div>
-                    </div>
+                    {!fullyPaid ? (
+                      <div className="mt-3 space-y-3">
+                        <PayButton paymentId={p.id} />
 
-                    {!fullyPaid && (
-                      <PayButton paymentId={p.id}
-                        amount={Number(p.amount_due) - Number(p.amount_paid)} />
-                    )}
-                    {fullyPaid && p.payment_channel === 'toyyibpay' && (
+                        {hasBank && (
+                          <>
+                            <div className="flex items-center gap-3 text-[11px] text-slate-400">
+                              <span className="flex-1 border-t border-slate-200" />
+                              or
+                              <span className="flex-1 border-t border-slate-200" />
+                            </div>
+                            <details className="bg-slate-50 rounded-xl border border-slate-200">
+                              <summary className="cursor-pointer text-xs font-medium text-slate-700 px-3 py-2.5">
+                                🏦 View Bank Transfer Details
+                              </summary>
+                              <div className="px-3 pb-3 text-xs space-y-1.5">
+                                <div className="flex justify-between">
+                                  <span className="text-slate-500">Bank</span>
+                                  <span className="font-medium text-slate-800">{bank.name}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-500">Account Name</span>
+                                  <span className="font-medium text-slate-800">{bank.holder}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-500">Account No.</span>
+                                  <span className="font-mono font-medium text-slate-800">{bank.account}</span>
+                                </div>
+                                <p className="text-[11px] text-slate-500 bg-white border border-slate-200 rounded-lg p-2 mt-1">
+                                  ℹ️ Please use your name as the payment reference.
+                                </p>
+                              </div>
+                            </details>
+                          </>
+                        )}
+                      </div>
+                    ) : p.payment_channel === 'toyyibpay' ? (
                       <p className="text-[11px] text-emerald-600 text-center mt-3">
                         ✓ Paid online via toyyibPay
                       </p>
-                    )}
+                    ) : null}
                   </div>
                 );
               })}
