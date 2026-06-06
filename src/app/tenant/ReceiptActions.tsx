@@ -10,6 +10,7 @@ type Props = {
   datePaid: string;
   method: string;
   reference: string;
+  hideShare?: boolean;
 };
 
 async function buildPdf(d: Props) {
@@ -109,13 +110,15 @@ export default function ReceiptActions(props: Props) {
   return (
     <div className="flex gap-2">
       <button onClick={viewPdf} disabled={busy} title="View / download PDF receipt"
-        className="px-3 py-2 text-sm border border-slate-300 text-slate-700 rounded-lg font-medium disabled:opacity-50">
-        📄 PDF
+        className={`${props.hideShare ? 'flex-1' : 'px-3'} py-2 text-sm border border-slate-300 text-slate-700 rounded-lg font-medium disabled:opacity-50`}>
+        📄 {props.hideShare ? 'View slip (PDF)' : 'PDF'}
       </button>
-      <button onClick={share} disabled={busy}
-        className="flex-1 inline-flex items-center justify-center gap-1 text-sm bg-emerald-500 text-white py-2 rounded-lg font-medium disabled:opacity-50">
-        💬 WhatsApp
-      </button>
+      {!props.hideShare && (
+        <button onClick={share} disabled={busy}
+          className="flex-1 inline-flex items-center justify-center gap-1 text-sm bg-emerald-500 text-white py-2 rounded-lg font-medium disabled:opacity-50">
+          💬 WhatsApp
+        </button>
+      )}
     </div>
   );
 }

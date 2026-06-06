@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { generateLinkCode, setUserRole } from './actions';
+import { generateLinkCode, setUserRole, savePaymentSettings } from './actions';
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -43,6 +43,36 @@ export default async function SettingsPage() {
       </section>
 
       {profile?.role === 'owner' && (
+        <section className="bg-white border border-slate-200 rounded-2xl p-6 mb-6">
+          <h3 className="font-medium mb-2">Payment settings</h3>
+          <p className="text-sm text-slate-600 mb-4">
+            Rent for properties <b>you own</b> is collected into <b>your</b> ToyyibPay account &amp; bank.
+            Get your Secret Key &amp; Category Code from your ToyyibPay dashboard.
+          </p>
+          <form action={savePaymentSettings} className="grid gap-3 max-w-md">
+            <input name="toyyibpay_secret_key" defaultValue={profile.toyyibpay_secret_key ?? ''}
+              placeholder="ToyyibPay Secret Key"
+              className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+            <input name="toyyibpay_category_code" defaultValue={profile.toyyibpay_category_code ?? ''}
+              placeholder="ToyyibPay Category Code"
+              className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+            <input name="bank_name" defaultValue={profile.bank_name ?? ''}
+              placeholder="Bank name (e.g. Maybank)"
+              className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+            <input name="bank_account_no" defaultValue={profile.bank_account_no ?? ''}
+              placeholder="Bank account number"
+              className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+            <input name="bank_account_name" defaultValue={profile.bank_account_name ?? ''}
+              placeholder="Account holder name"
+              className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+            <button className="bg-blue-600 text-white py-2.5 rounded-lg text-sm font-medium">
+              Save payment settings
+            </button>
+          </form>
+        </section>
+      )}
+
+      {profile?.role === 'owner' && (
         <section className="bg-white border border-slate-200 rounded-2xl p-6">
           <h3 className="font-medium mb-2">Users & roles</h3>
           <p className="text-sm text-slate-600 mb-4">
@@ -63,7 +93,6 @@ export default async function SettingsPage() {
                       <select name="role" defaultValue={p.role}
                         className="px-2 py-1 border border-slate-300 rounded text-sm">
                         <option value="owner">owner</option>
-                        <option value="agent">agent</option>
                         <option value="tenant">tenant</option>
                       </select>
                       <button className="text-xs bg-slate-900 text-white px-3 rounded">Save</button>

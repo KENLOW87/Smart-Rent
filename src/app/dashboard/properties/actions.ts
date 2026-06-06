@@ -65,7 +65,7 @@ export async function createProperty(formData: FormData) {
   if (!user) throw new Error('Not authenticated');
 
   const { data: property, error } = await supabase.from('properties').insert({
-    owner_id: user.id,
+    owner_id: String(formData.get('owner_id') || '') || user.id,
     name: String(formData.get('name')),
     rental_amount: Number(formData.get('rental_amount')),
     due_day_of_month: Number(formData.get('due_day_of_month')),
@@ -110,15 +110,51 @@ export async function deleteProperty(id: string) {
   revalidatePath('/dashboard');
 }
 
-export async function setPropertyAgents(propertyId: string, formData: FormData) {
+export async function setPropertyOwner(propertyId: string, formData: FormData) {
   const supabase = await createClient();
-  const agentIds = formData.getAll('agent_id').map(String).filter(Boolean);
+  const owner_id = String(formData.get('owner_id') || '');
+  if (!owner_id) throw new Error('Owner required');
+  const { error } = await supabase.from('properties').update({ owner_id }).eq('id', propertyId);
+  if (error) throw error;
+  revalidatePath('/dashboard/properties');
+  revalidatePath('/dashboard');
+}
 
-  await supabase.from('property_agents').delete().eq('property_id', propertyId);
-  if (agentIds.length) {
-    const rows = agentIds.map((agent_id) => ({ property_id: propertyId, agent_id }));
-    const { error } = await supabase.from('property_agents').insert(rows);
-    if (error) throw error;
+export async function editProperty(propertyId: string, formData: FormData) {
+  const supabase = await createClient();
+  const { error } = await supabase.from('properties').update({
+    name: String(formData.get('name')),
+    rental_amount: Number(formData.get('rental_amount')),
+    due_day_of_month: Number(formData.get('due_day_of_month')),
+  }).eq('id', propertyId);
+  if (error) throw error;
+  revalidatePath('/dashboard/properties');
+  revalidatePath('/dashboard');
+}
+
+// Edit a tenant's name / phone. Changing the phone also updates their login.
+export async function editTenant(tenantId: string, formData: FormData) {
+  const admin = createAdminClient();
+  const fullName = String(formData.get('tenant_name') || '').trim();
+  const phone = String(formData.get('tenant_phone') || '').trim();
+  if (!fullName || !phone) throw new Error('Tenant name and phone are required');
+
+  const { data: t } = await admin.from('tenants')
+    .select('id, profile_id, phone').eq('id', tenantId).single();
+  if (!t) throw new Error('Tenant not found');
+
+  await admin.from('tenants').update({ full_name: fullName, phone }).eq('id', tenantId);
+
+  if (t.profile_id) {
+    await admin.from('profiles').update({ full_name: fullName, phone }).eq('id', t.profile_id);
+    if (phone !== t.phone) {
+      await admin.auth.admin.updateUserById(t.profile_id, {
+        email: phoneToEmail(phone),
+        password: phoneToPassword(phone),
+        email_confirm: true,
+      });
+    }
   }
   revalidatePath('/dashboard/properties');
+  revalidatePath('/dashboard');
 }

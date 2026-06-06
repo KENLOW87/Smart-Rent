@@ -15,7 +15,7 @@ export async function startPayment(paymentId: string): Promise<{ url?: string; e
 
     const { data: payment } = await supabase
       .from('payments')
-      .select('id, amount_due, amount_paid, status, period_year, period_month, tenants!inner(full_name, phone, email, profile_id), properties(name)')
+      .select('id, amount_due, amount_paid, status, period_year, period_month, tenants!inner(full_name, phone, email, profile_id), properties(name, owner_id)')
       .eq('id', paymentId)
       .single();
 
@@ -23,7 +23,7 @@ export async function startPayment(paymentId: string): Promise<{ url?: string; e
       id: string; amount_due: number; amount_paid: number; status: string;
       period_year: number; period_month: number;
       tenants: { full_name: string; phone: string | null; email: string | null; profile_id: string | null } | null;
-      properties: { name: string } | null;
+      properties: { name: string; owner_id: string } | null;
     };
     const p = payment as unknown as Row | null;
     if (!p || p.tenants?.profile_id !== user.id) return { error: 'This payment is not linked to your account.' };
@@ -40,7 +40,16 @@ export async function startPayment(paymentId: string): Promise<{ url?: string; e
     // Tenants have no real email — send the ToyyibPay receipt to the owner instead.
     const email = p.tenants?.email || process.env.OWNER_EMAIL || `${cleanPhone}@smartrent.local`;
 
+    const admin = createAdminClient();
+    const { data: ownerCfg } = await admin
+      .from('profiles')
+      .select('toyyibpay_secret_key, toyyibpay_category_code')
+      .eq('id', p.properties?.owner_id ?? '')
+      .maybeSingle();
+
     const billCode = await createBill({
+      secretKey: ownerCfg?.toyyibpay_secret_key ?? undefined,
+      categoryCode: ownerCfg?.toyyibpay_category_code ?? undefined,
       amountRM: remaining,
       billName: `${p.properties?.name ?? 'Rental'} ${monthLabel}`,
       billDescription: `Rent for ${p.properties?.name ?? 'rental'} (${monthLabel}) - ${p.tenants?.full_name ?? 'tenant'}`,
@@ -52,7 +61,6 @@ export async function startPayment(paymentId: string): Promise<{ url?: string; e
       payorPhone: cleanPhone,
     });
 
-    const admin = createAdminClient();
     await admin.from('payments')
       .update({ toyyibpay_bill_code: billCode, payment_channel: 'toyyibpay' })
       .eq('id', p.id);

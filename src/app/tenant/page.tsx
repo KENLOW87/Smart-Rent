@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import LogoutButton from '../dashboard/LogoutButton';
 import PayButton from './PayButton';
 import ReceiptActions from './ReceiptActions';
@@ -15,7 +16,7 @@ export default async function TenantHome() {
 
   const { data: tenant } = await supabase
     .from('tenants')
-    .select('*, properties(name, address, rental_amount, due_day_of_month)')
+    .select('*, properties(name, address, rental_amount, due_day_of_month, owner_id)')
     .eq('profile_id', user.id).eq('active', true).maybeSingle();
 
   const { data: payments } = await supabase
@@ -28,11 +29,27 @@ export default async function TenantHome() {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const bank = {
+  // Bank details come from the property OWNER's profile (each owner's tenants see
+  // that owner's bank). Falls back to the global env defaults if not set.
+  let bank = {
     name: process.env.BANK_NAME || '',
     holder: process.env.BANK_ACCOUNT_NAME || '',
     account: process.env.BANK_ACCOUNT_NO || '',
   };
+  const ownerId = (tenant?.properties as { owner_id?: string } | null)?.owner_id;
+  if (ownerId) {
+    const admin = createAdminClient();
+    const { data: ob } = await admin
+      .from('profiles')
+      .select('bank_name, bank_account_no, bank_account_name')
+      .eq('id', ownerId)
+      .maybeSingle();
+    bank = {
+      name: ob?.bank_name || bank.name,
+      holder: ob?.bank_account_name || bank.holder,
+      account: ob?.bank_account_no || bank.account,
+    };
+  }
   const hasBank = Boolean(bank.name && bank.account);
 
   return (

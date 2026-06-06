@@ -1,10 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import {
-  createProperty, deleteProperty, setPropertyAgents,
-  addTenantToProperty, moveOutTenant,
+  createProperty, deleteProperty, addTenantToProperty, moveOutTenant,
+  setPropertyOwner, editProperty, editTenant,
 } from './actions';
 
-// Build a WhatsApp click-to-chat link with a prefilled invite message.
+// WhatsApp click-to-chat link with a prefilled tenant invite message.
 function waLink(name: string, phone: string, property: string) {
   const site = process.env.NEXT_PUBLIC_SITE_URL || 'https://smart-rent-wheat.vercel.app';
   const digits = phone.replace(/\D/g, '');
@@ -20,23 +21,20 @@ function waLink(name: string, phone: string, property: string) {
 export default async function PropertiesPage() {
   const supabase = await createClient();
 
-  const [{ data: properties }, { data: agents }, { data: assignments }, { data: tenants }, { data: { user } }] = await Promise.all([
+  const [{ data: properties }, { data: owners }, { data: tenants }, { data: { user } }] = await Promise.all([
     supabase.from('properties').select('*').order('created_at', { ascending: false }),
-    supabase.from('profiles').select('id, full_name').eq('role', 'agent'),
-    supabase.from('property_agents').select('property_id, agent_id'),
+    supabase.from('profiles').select('id, full_name').eq('role', 'owner'),
     supabase.from('tenants').select('id, property_id, full_name, phone, active').eq('active', true),
     supabase.auth.getUser(),
   ]);
-  const { data: me } = await supabase
-    .from('profiles').select('role').eq('id', user!.id).single();
+  const { data: me } = await supabase.from('profiles').select('role').eq('id', user!.id).single();
   const isOwner = me?.role === 'owner';
 
-  const assignedByProperty = new Map<string, string[]>();
-  for (const a of assignments ?? []) {
-    const list = assignedByProperty.get(a.property_id) ?? [];
-    list.push(a.agent_id);
-    assignedByProperty.set(a.property_id, list);
-  }
+  // Owner bank details (admin read — bank fields only, never the secret key).
+  const admin = createAdminClient();
+  const { data: ownerBanks } = await admin
+    .from('profiles').select('id, bank_name, bank_account_no, bank_account_name').eq('role', 'owner');
+  const bankByOwner = new Map((ownerBanks ?? []).map((o) => [o.id, o]));
 
   const tenantByProperty = new Map<string, { id: string; full_name: string; phone: string | null }>();
   for (const t of tenants ?? []) {
@@ -44,6 +42,8 @@ export default async function PropertiesPage() {
       tenantByProperty.set(t.property_id, { id: t.id, full_name: t.full_name, phone: t.phone });
     }
   }
+  const ownerName = (id: string | null | undefined) =>
+    owners?.find((o) => o.id === id)?.full_name ?? '—';
 
   return (
     <div className="space-y-4">
@@ -65,6 +65,13 @@ export default async function PropertiesPage() {
                 placeholder="Due day"
                 className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
             </div>
+            <label className="text-xs text-slate-600">
+              Belongs to (owner — rent goes to their account)
+              <select name="owner_id" defaultValue={user?.id}
+                className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+                {owners?.map((o) => <option key={o.id} value={o.id}>{o.full_name}</option>)}
+              </select>
+            </label>
             <div className="border-t border-slate-100 pt-3 grid gap-3">
               <p className="text-xs font-medium text-slate-700">
                 Tenant <span className="font-normal text-slate-400">(leave blank if vacant)</span>
@@ -85,14 +92,20 @@ export default async function PropertiesPage() {
 
       <div className="space-y-3">
         {properties?.map((p) => {
-          const assigned = assignedByProperty.get(p.id) ?? [];
           const tenant = tenantByProperty.get(p.id);
+          const ob = bankByOwner.get(p.owner_id);
           return (
             <div key={p.id} className="bg-white border border-slate-200 rounded-2xl p-4">
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="font-semibold">{p.name}</h3>
                   <p className="text-xs text-slate-500 mt-0.5">📅 Due day {p.due_day_of_month}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">🏠 Owner: {ownerName(p.owner_id)}</p>
+                  {(ob?.bank_name || ob?.bank_account_no) && (
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      🏦 {ob?.bank_name} · {ob?.bank_account_no}
+                    </p>
+                  )}
                 </div>
                 <span className="text-sm font-bold text-blue-600">
                   RM {Number(p.rental_amount).toFixed(0)}
@@ -122,6 +135,18 @@ export default async function PropertiesPage() {
                         </form>
                       </div>
                     )}
+                    {isOwner && (
+                      <details className="mt-2">
+                        <summary className="text-xs text-blue-600 cursor-pointer">Edit tenant name / phone</summary>
+                        <form action={editTenant.bind(null, tenant.id)} className="grid gap-2 mt-2">
+                          <input name="tenant_name" defaultValue={tenant.full_name} required placeholder="Tenant name"
+                            className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                          <input name="tenant_phone" defaultValue={tenant.phone ?? ''} required placeholder="Tenant phone (login)"
+                            className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                          <button className="text-xs bg-slate-900 text-white py-2 rounded-lg">Save tenant</button>
+                        </form>
+                      </details>
+                    )}
                   </div>
                 ) : isOwner ? (
                   <details>
@@ -141,22 +166,30 @@ export default async function PropertiesPage() {
 
               {isOwner && (
                 <details className="mt-3 border-t border-slate-100 pt-3">
-                  <summary className="text-xs text-slate-500 cursor-pointer">
-                    Agents in charge ({assigned.length})
-                  </summary>
-                  <form action={setPropertyAgents.bind(null, p.id)} className="mt-2 space-y-1.5">
-                    {agents?.length ? agents.map((a) => (
-                      <label key={a.id} className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" name="agent_id" value={a.id}
-                          defaultChecked={assigned.includes(a.id)} />
-                        {a.full_name}
-                      </label>
-                    )) : <p className="text-xs text-slate-400">No agents yet</p>}
-                    {agents?.length ? (
-                      <button className="text-xs bg-slate-900 text-white px-3 py-1.5 rounded-lg mt-1">
-                        Save
-                      </button>
-                    ) : null}
+                  <summary className="text-xs text-slate-500 cursor-pointer">✏️ Edit property</summary>
+                  <form action={editProperty.bind(null, p.id)} className="grid gap-2 mt-2">
+                    <input name="name" defaultValue={p.name} required placeholder="Property name"
+                      className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input name="rental_amount" type="number" step="0.01" defaultValue={p.rental_amount} required placeholder="Rent (RM)"
+                        className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                      <input name="due_day_of_month" type="number" min="1" max="28" defaultValue={p.due_day_of_month} required placeholder="Due day"
+                        className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                    </div>
+                    <button className="text-xs bg-slate-900 text-white py-2 rounded-lg">Save changes</button>
+                  </form>
+                </details>
+              )}
+
+              {isOwner && owners && owners.length > 1 && (
+                <details className="mt-3 border-t border-slate-100 pt-3">
+                  <summary className="text-xs text-slate-500 cursor-pointer">Change owner</summary>
+                  <form action={setPropertyOwner.bind(null, p.id)} className="flex gap-2 mt-2">
+                    <select name="owner_id" defaultValue={p.owner_id}
+                      className="flex-1 px-2 py-1 border border-slate-300 rounded text-sm bg-white">
+                      {owners.map((o) => <option key={o.id} value={o.id}>{o.full_name}</option>)}
+                    </select>
+                    <button className="text-xs bg-slate-900 text-white px-3 rounded">Save</button>
                   </form>
                 </details>
               )}

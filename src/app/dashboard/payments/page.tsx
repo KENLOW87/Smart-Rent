@@ -1,8 +1,19 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { approveProof, rejectProof } from './actions';
 import { displayStatus, daysLate, STATUS_META } from '@/lib/payment-status';
 import PeriodPicker from './PeriodPicker';
+import ReceiptActions from '../../tenant/ReceiptActions';
+
+// WhatsApp reminder to chase a tenant for unpaid / partial rent.
+function waChase(name: string, phone: string, property: string, month: string, outstanding: number) {
+  const digits = phone.replace(/\D/g, '');
+  const intl = digits.startsWith('60') ? digits : digits.startsWith('0') ? '60' + digits.slice(1) : '60' + digits;
+  const msg =
+    `Hi ${name}, a friendly reminder for your rent at ${property} (${month}).\n` +
+    `Outstanding: RM ${outstanding.toFixed(0)}.\n` +
+    `Kindly settle as soon as possible. Thank you. \u{1F64F}`;
+  return `https://wa.me/${intl}?text=${encodeURIComponent(msg)}`;
+}
 
 export default async function PaymentsPage({
   searchParams,
@@ -48,17 +59,14 @@ export default async function PaymentsPage({
 
   const { data: rawPayments } = await supabase
     .from('payments')
-    .select('*, tenants(full_name, profile_id), properties(name), payment_proofs(id, status, ai_amount, ai_date, ai_reference, ai_bank, uploaded_at)')
+    .select('*, tenants(full_name, profile_id, phone), properties(name)')
     .eq('period_year', year).eq('period_month', month)
     .order('due_date');
 
-  const payments = (rawPayments ?? []).filter((p) => {
-    if (filter === 'all') return true;
-    return displayStatus(p, today) === filter;
-  });
+  const payments = (rawPayments ?? []).filter((p) => filter === 'all' || displayStatus(p, today) === filter);
 
   const monthLabel = new Date(year, month - 1).toLocaleString('en', { month: 'long', year: 'numeric' });
-  const chips: Array<{ key: string; label: string }> = [
+  const chips = [
     { key: 'all', label: 'All' },
     { key: 'paid', label: 'Paid' },
     { key: 'paid_late', label: 'Paid (Late)' },
@@ -75,9 +83,7 @@ export default async function PaymentsPage({
         {chips.map((c) => (
           <a key={c.key} href={`?y=${year}&m=${month}&filter=${c.key}`}
             className={`px-3 py-1.5 rounded-full text-xs font-medium border whitespace-nowrap ${
-              filter === c.key
-                ? 'bg-slate-900 text-white border-slate-900'
-                : 'bg-white text-slate-600 border-slate-200'
+              filter === c.key ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200'
             }`}>
             {c.label}
           </a>
@@ -87,22 +93,23 @@ export default async function PaymentsPage({
       <div className="space-y-3">
         {payments?.map((p: {
           id: string; due_date: string; amount_due: number; amount_paid: number; paid_at: string | null;
-          status: string; tenants: { full_name: string; profile_id: string | null } | null;
+          period_year: number; period_month: number; status: string;
+          tenants: { full_name: string; profile_id: string | null; phone: string | null } | null;
           properties: { name: string } | null;
           payment_channel?: string | null; toyyibpay_ref_no?: string | null;
-          payment_proofs?: Array<{ id: string; status: string; ai_amount: number | null; ai_date: string | null; ai_reference: string | null; ai_bank: string | null }>;
         }) => {
-          const proof = p.payment_proofs?.[p.payment_proofs.length - 1];
           const dstatus = displayStatus(p, today);
           const meta = STATUS_META[dstatus];
           const lateDays = dstatus === 'paid_late' && p.paid_at ? daysLate(p.paid_at, p.due_date) : 0;
           const fullyPaid = dstatus === 'paid' || dstatus === 'paid_late';
+          const outstanding = Number(p.amount_due) - Number(p.amount_paid);
+          const periodLabel = new Date(p.period_year, p.period_month - 1).toLocaleString('en', { month: 'long', year: 'numeric' });
           return (
             <div key={p.id} className="bg-white border border-slate-200 rounded-2xl p-4">
               <div className="flex justify-between items-start">
                 <div>
-                  <h3 className="font-semibold">{p.tenants?.full_name}</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">{p.properties?.name}</p>
+                  <h3 className="font-semibold">{p.properties?.name ?? '—'}</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">{p.tenants?.full_name}</p>
                 </div>
                 {dstatus !== 'upcoming' ? (
                   <span className={`text-[10px] px-2 py-1 rounded-full font-medium ${meta.pill}`}>
@@ -119,59 +126,34 @@ export default async function PaymentsPage({
                   <p className="font-semibold text-base">RM {Number(p.amount_due).toFixed(0)}</p>
                 </div>
                 <div>
-                  <p className="text-slate-500">Due</p>
-                  <p className="font-semibold text-base">{p.due_date}</p>
+                  <p className="text-slate-500">{fullyPaid ? 'Paid' : 'Outstanding'}</p>
+                  <p className="font-semibold text-base">
+                    RM {(fullyPaid ? Number(p.amount_paid) : outstanding).toFixed(0)}
+                  </p>
                 </div>
               </div>
 
-              {fullyPaid && p.payment_channel === 'toyyibpay' && (
-                <div className="mt-3 rounded-xl p-3 border bg-emerald-50 border-emerald-200 text-xs">
-                  <p className="font-semibold text-emerald-700">💳 Paid online via toyyibPay (FPX)</p>
-                  {p.toyyibpay_ref_no && (
-                    <p className="text-[10px] text-slate-500 mt-0.5">Invoice ref: {p.toyyibpay_ref_no}</p>
-                  )}
-                </div>
-              )}
-
-              {proof && (
-                <div className={`mt-3 rounded-xl p-3 border text-xs ${
-                  proof.status === 'verified' ? 'bg-emerald-50 border-emerald-200' :
-                  proof.status === 'mismatch' ? 'bg-red-50 border-red-200' :
-                  proof.status === 'needs_review' ? 'bg-amber-50 border-amber-200' :
-                  proof.status === 'error' ? 'bg-red-50 border-red-200' :
-                  'bg-slate-50 border-slate-200'
-                }`}>
-                  <p className="font-semibold mb-1">
-                    {proof.status === 'verified' && '✓ AI verified receipt'}
-                    {proof.status === 'mismatch' && '⚠ Wrong recipient — possible fraud'}
-                    {proof.status === 'needs_review' && '⏸ Needs your review'}
-                    {proof.status === 'pending' && '⏳ Processing'}
-                    {proof.status === 'error' && '✗ AI read error'}
-                  </p>
-                  {proof.ai_amount !== null && (
-                    <p className="text-slate-600">
-                      RM {Number(proof.ai_amount).toFixed(2)}
-                      {proof.ai_date && ` · ${proof.ai_date}`}
-                      {proof.ai_bank && ` · ${proof.ai_bank}`}
-                    </p>
-                  )}
-                  {(proof.status === 'needs_review' || proof.status === 'mismatch') && (
-                    <div className="flex gap-2 mt-2">
-                      <form action={async () => { 'use server'; await approveProof(proof.id, p.id); }} className="flex-1">
-                        <button className="w-full text-xs bg-emerald-600 text-white py-1.5 rounded-lg font-medium">
-                          ✓ Approve
-                        </button>
-                      </form>
-                      <form action={async () => { 'use server'; await rejectProof(proof.id); }} className="flex-1">
-                        <button className="w-full text-xs bg-white border border-red-300 text-red-700 py-1.5 rounded-lg font-medium">
-                          ✗ Reject
-                        </button>
-                      </form>
-                    </div>
-                  )}
-                </div>
-              )}
-
+              <div className="mt-3 border-t border-slate-100 pt-3">
+                {fullyPaid ? (
+                  <ReceiptActions hideShare
+                    amount={Number(p.amount_paid || p.amount_due).toFixed(2)}
+                    tenant={p.tenants?.full_name ?? ''}
+                    property={p.properties?.name ?? ''}
+                    period={periodLabel}
+                    datePaid={p.paid_at ? new Date(p.paid_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
+                    method={p.payment_channel === 'toyyibpay' ? 'Online - FPX (toyyibPay)' : 'Recorded by owner'}
+                    reference={p.toyyibpay_ref_no ?? ''}
+                  />
+                ) : p.tenants?.phone ? (
+                  <a href={waChase(p.tenants.full_name, p.tenants.phone, p.properties?.name ?? '', periodLabel, outstanding)}
+                    target="_blank" rel="noopener noreferrer"
+                    className="block text-center text-sm bg-emerald-500 text-white py-2.5 rounded-lg font-medium">
+                    💬 WhatsApp tenant (remind)
+                  </a>
+                ) : (
+                  <p className="text-xs text-slate-400 text-center">No tenant phone to remind.</p>
+                )}
+              </div>
             </div>
           );
         })}

@@ -179,7 +179,7 @@ function UnitCard({ unit }: {
         </div>
       </div>
 
-      <Link href="/dashboard/payments"
+      <Link href={`/dashboard/property/${unit.propertyId}`}
         className="block mt-3 text-sm text-center bg-blue-600 text-white py-2.5 rounded-lg font-medium">
         View detail
       </Link>

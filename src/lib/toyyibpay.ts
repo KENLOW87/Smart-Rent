@@ -7,6 +7,8 @@ function sanitize(s: string, max: number) {
 }
 
 export interface CreateBillInput {
+  secretKey?: string;        // property owner's ToyyibPay key (falls back to env)
+  categoryCode?: string;     // property owner's ToyyibPay category (falls back to env)
   amountRM: number;          // amount in ringgit
   billName: string;
   billDescription: string;
@@ -19,10 +21,10 @@ export interface CreateBillInput {
 }
 
 export async function createBill(input: CreateBillInput): Promise<string> {
-  const userSecretKey = process.env.TOYYIBPAY_SECRET_KEY;
-  const categoryCode = process.env.TOYYIBPAY_CATEGORY_CODE;
+  const userSecretKey = input.secretKey || process.env.TOYYIBPAY_SECRET_KEY;
+  const categoryCode = input.categoryCode || process.env.TOYYIBPAY_CATEGORY_CODE;
   if (!userSecretKey || !categoryCode) {
-    throw new Error('ToyyibPay is not configured (missing secret key or category code)');
+    throw new Error('ToyyibPay is not set up for this property owner (no secret key / category).');
   }
 
   const params = new URLSearchParams({
