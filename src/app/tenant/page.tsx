@@ -132,11 +132,19 @@ export default async function TenantHome() {
                           </>
                         )}
                       </div>
-                    ) : p.payment_channel === 'toyyibpay' ? (
-                      <p className="text-[11px] text-emerald-600 text-center mt-3">
-                        ✓ Paid online via toyyibPay
-                      </p>
-                    ) : null}
+                    ) : (
+                      <div className="mt-3 space-y-2">
+                        {p.payment_channel === 'toyyibpay' && (
+                          <p className="text-[11px] text-emerald-600 text-center">
+                            ✓ Paid online via toyyibPay
+                          </p>
+                        )}
+                        <a href={`/tenant/receipt/${p.id}`}
+                          className="block text-center text-xs border border-slate-300 text-slate-700 py-2 rounded-lg">
+                          🧾 View / share receipt
+                        </a>
+                      </div>
+                    )}
                   </div>
                 );
               })}
