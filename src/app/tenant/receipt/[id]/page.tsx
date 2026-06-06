@@ -1,6 +1,7 @@
 import { redirect, notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { displayStatus } from '@/lib/payment-status';
+import ReceiptActions from './ReceiptActions';
 
 export default async function ReceiptPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -63,8 +64,19 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
         </p>
       </div>
 
-      <p className="text-xs text-slate-500 text-center mt-4">
-        📸 Screenshot this receipt to save it or send it to your landlord on WhatsApp.
+      {isPaid && (
+        <ReceiptActions
+          amount={Number(p.amount_paid || p.amount_due).toFixed(2)}
+          tenant={p.tenants?.full_name ?? ''}
+          property={p.properties?.name ?? ''}
+          period={monthLabel}
+          datePaid={paidDate}
+          method={p.payment_channel === 'toyyibpay' ? 'Online - FPX (toyyibPay)' : 'Recorded by owner'}
+          reference={p.toyyibpay_ref_no ?? ''}
+        />
+      )}
+      <p className="text-[11px] text-slate-400 text-center mt-3 max-w-sm">
+        Tap <b>WhatsApp</b> to send this receipt to your landlord as proof of payment.
       </p>
       <a href="/tenant" className="mt-4 text-sm text-blue-600">← Back to my rental</a>
     </div>
