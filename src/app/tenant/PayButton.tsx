@@ -10,11 +10,11 @@ export default function PayButton({ paymentId, amount }: { paymentId: string; am
   async function go() {
     setBusy(true);
     setErr(null);
-    try {
-      const url = await startPayment(paymentId);
-      window.location.href = url;
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Could not start payment');
+    const res = await startPayment(paymentId);
+    if (res.url) {
+      window.location.href = res.url;
+    } else {
+      setErr(res.error ?? 'Could not start payment');
       setBusy(false);
     }
   }
