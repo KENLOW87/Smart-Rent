@@ -1,16 +1,22 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { sendTelegram, formatReminder } from '@/lib/telegram';
+import { sendTelegram, formatReminder, formatOwnerSummary } from '@/lib/telegram';
 
 // Daily cron — runs via Vercel cron (see vercel.json).
 // 1. Auto-generate payment rows for the current month if missing.
 // 2. For each unpaid payment: send reminder 3 days before due, on due, and every 3 days overdue.
 // 3. Mark overdue rows as 'late'.
 export async function GET(req: Request) {
-  const secret = req.headers.get('x-cron-secret') ?? new URL(req.url).searchParams.get('secret');
+  const url = new URL(req.url);
+  // Vercel cron sends the secret as "Authorization: Bearer <CRON_SECRET>".
+  // Also accept x-cron-secret header or ?secret= for manual testing.
+  const authHeader = req.headers.get('authorization');
+  const bearer = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const secret = req.headers.get('x-cron-secret') ?? url.searchParams.get('secret') ?? bearer;
   if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
+  const forceSummary = url.searchParams.get('summary') === '1';
 
   const supabase = createAdminClient();
   const now = new Date();
@@ -106,5 +112,47 @@ export async function GET(req: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, sent, scanned: unpaid?.length ?? 0 });
+  // 3) Monthly owner summary — on the 15th, send the full paid/unpaid list
+  //    (all properties, both owners' tenants) to every owner with Telegram linked.
+  let summarySent = 0;
+  if (now.getDate() === 15 || forceSummary) {
+    const { data: monthPayments } = await supabase
+      .from('payments')
+      .select('amount_due, amount_paid, due_date, tenants(full_name), properties(name)')
+      .eq('period_year', year).eq('period_month', month).eq('hidden', false);
+
+    type SumRow = {
+      amount_due: number; amount_paid: number; due_date: string;
+      tenants: { full_name: string } | null; properties: { name: string } | null;
+    };
+    const paidList: { property: string; tenant: string; amount: number }[] = [];
+    const unpaidList: { property: string; tenant: string; outstanding: number; due: string }[] = [];
+    for (const p of (monthPayments ?? []) as unknown as SumRow[]) {
+      const property = p.properties?.name ?? '—';
+      const tenant = p.tenants?.full_name ?? '—';
+      const due = Number(p.amount_due);
+      const paidAmt = Number(p.amount_paid);
+      if (due > 0 && paidAmt >= due) paidList.push({ property, tenant, amount: paidAmt });
+      else unpaidList.push({ property, tenant, outstanding: due - paidAmt, due: p.due_date });
+    }
+
+    const monthLabel = new Date(year, month - 1).toLocaleString('en', { month: 'long', year: 'numeric' });
+    const summary = formatOwnerSummary({ monthLabel, paid: paidList, unpaid: unpaidList });
+
+    const { data: owners } = await supabase
+      .from('profiles').select('telegram_chat_id')
+      .eq('role', 'owner').not('telegram_chat_id', 'is', null);
+
+    for (const o of (owners ?? []) as { telegram_chat_id: string | null }[]) {
+      if (!o.telegram_chat_id) continue;
+      try {
+        await sendTelegram(o.telegram_chat_id, summary);
+        summarySent++;
+      } catch (e) {
+        console.error('Summary send error', e);
+      }
+    }
+  }
+
+  return NextResponse.json({ ok: true, sent, scanned: unpaid?.length ?? 0, summarySent });
 }

@@ -38,3 +38,36 @@ export function formatReminder(opts: {
       return `Hi ${opts.tenantName}, your rental for <b>${opts.propertyName}</b> (${amount}) was due on <b>${opts.dueDate}</b> and is now <b>${opts.daysLate} day(s) late</b>. Please settle as soon as possible.`;
   }
 }
+
+// Monthly owner summary: who has paid and who hasn't, across ALL properties
+// (both owners' tenants). Sent to every owner.
+export function formatOwnerSummary(opts: {
+  monthLabel: string;
+  paid: { property: string; tenant: string; amount: number }[];
+  unpaid: { property: string; tenant: string; outstanding: number; due: string }[];
+}) {
+  const lines: string[] = [];
+  lines.push(`📊 <b>Rent summary — ${opts.monthLabel}</b>`);
+
+  lines.push('');
+  lines.push(`✅ <b>PAID (${opts.paid.length})</b>`);
+  if (opts.paid.length) {
+    for (const p of opts.paid) lines.push(`• ${p.property} — ${p.tenant} — RM ${p.amount.toFixed(0)}`);
+  } else {
+    lines.push('• None yet');
+  }
+
+  lines.push('');
+  lines.push(`❌ <b>NOT PAID (${opts.unpaid.length})</b>`);
+  if (opts.unpaid.length) {
+    for (const u of opts.unpaid) lines.push(`• ${u.property} — ${u.tenant} — RM ${u.outstanding.toFixed(0)} (due ${u.due})`);
+  } else {
+    lines.push('• Everyone has paid 🎉');
+  }
+
+  const collected = opts.paid.reduce((s, p) => s + p.amount, 0);
+  const outstanding = opts.unpaid.reduce((s, u) => s + u.outstanding, 0);
+  lines.push('');
+  lines.push(`💰 Collected: RM ${collected.toFixed(0)} · Outstanding: RM ${outstanding.toFixed(0)}`);
+  return lines.join('\n');
+}
