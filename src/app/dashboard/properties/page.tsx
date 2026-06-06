@@ -184,13 +184,12 @@ export default async function PropertiesPage() {
               {isOwner && owners && owners.length > 1 && (
                 <details className="mt-3 border-t border-slate-100 pt-3">
                   <summary className="text-xs text-slate-500 cursor-pointer">Change owner</summary>
-                  <form action={setPropertyOwner.bind(null, p.id)} className="flex gap-2 mt-2">
+                  <SaveForm action={setPropertyOwner.bind(null, p.id)} label="Save owner">
                     <select name="owner_id" defaultValue={p.owner_id}
-                      className="flex-1 px-2 py-1 border border-slate-300 rounded text-sm bg-white">
+                      className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
                       {owners.map((o) => <option key={o.id} value={o.id}>{o.full_name}</option>)}
                     </select>
-                    <button className="text-xs bg-slate-900 text-white px-3 rounded">Save</button>
-                  </form>
+                  </SaveForm>
                 </details>
               )}
 

@@ -110,14 +110,24 @@ export async function deleteProperty(id: string) {
   revalidatePath('/dashboard');
 }
 
-export async function setPropertyOwner(propertyId: string, formData: FormData) {
-  const supabase = await createClient();
-  const owner_id = String(formData.get('owner_id') || '');
-  if (!owner_id) throw new Error('Owner required');
-  const { error } = await supabase.from('properties').update({ owner_id }).eq('id', propertyId);
-  if (error) throw error;
-  revalidatePath('/dashboard/properties');
-  revalidatePath('/dashboard');
+export async function setPropertyOwner(
+  propertyId: string,
+  _prev: { ok?: boolean; error?: string },
+  formData: FormData,
+): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const owner_id = String(formData.get('owner_id') || '');
+    if (!owner_id) return { error: 'Please choose an owner.' };
+    const { error } = await supabase.from('properties').update({ owner_id }).eq('id', propertyId);
+    if (error) return { error: error.message };
+    revalidatePath('/dashboard/properties');
+    revalidatePath('/dashboard');
+    revalidatePath('/dashboard/payments');
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Could not change owner.' };
+  }
 }
 
 export async function editProperty(
