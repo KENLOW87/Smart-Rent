@@ -37,7 +37,8 @@ export async function startPayment(paymentId: string): Promise<{ url?: string; e
 
     const site = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
     const cleanPhone = (p.tenants?.phone || '').replace(/[^0-9]/g, '') || '0000000000';
-    const email = p.tenants?.email || `${cleanPhone}@smartrent.local`;
+    // Tenants have no real email — send the ToyyibPay receipt to the owner instead.
+    const email = p.tenants?.email || process.env.OWNER_EMAIL || `${cleanPhone}@smartrent.local`;
 
     const billCode = await createBill({
       amountRM: remaining,
