@@ -40,7 +40,7 @@ export async function createBill(input: CreateBillInput): Promise<string> {
     billEmail: input.payorEmail,
     billPhone: input.payorPhone,
     billPaymentChannel: '0',                               // FPX online banking
-    // billChargeToCustomer intentionally OMITTED => bill owner absorbs the RM1 fee
+    billChargeToCustomer: '0',                             // RM1 FPX fee charged to the tenant (payer), not the owner
   });
 
   const res = await fetch(`${BASE}/index.php/api/createBill`, {
