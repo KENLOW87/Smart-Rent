@@ -42,8 +42,8 @@ export async function startPayment(paymentId: string): Promise<{ url?: string; e
 
     const billCode = await createBill({
       amountRM: remaining,
-      billName: `Rent ${monthLabel}`,
-      billDescription: `Rent ${p.properties?.name ?? ''} ${monthLabel}`,
+      billName: `${p.properties?.name ?? 'Rental'} ${monthLabel}`,
+      billDescription: `Rent for ${p.properties?.name ?? 'rental'} (${monthLabel}) - ${p.tenants?.full_name ?? 'tenant'}`,
       externalRef: p.id,
       returnUrl: `${site}/pay/return`,
       callbackUrl: `${site}/api/toyyibpay/callback`,
