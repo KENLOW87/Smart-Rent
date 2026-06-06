@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import LogoutButton from '../dashboard/LogoutButton';
 import PayButton from './PayButton';
+import ReceiptActions from './ReceiptActions';
 import { displayStatus, daysLate, STATUS_META } from '@/lib/payment-status';
 
 export default async function TenantHome() {
@@ -139,10 +140,15 @@ export default async function TenantHome() {
                             ✓ Paid online via toyyibPay
                           </p>
                         )}
-                        <a href={`/tenant/receipt/${p.id}`}
-                          className="block text-center text-xs border border-slate-300 text-slate-700 py-2 rounded-lg">
-                          🧾 View / share receipt
-                        </a>
+                        <ReceiptActions
+                          amount={Number(p.amount_paid || p.amount_due).toFixed(2)}
+                          tenant={tenant.full_name}
+                          property={tenant.properties?.name ?? ''}
+                          period={new Date(p.period_year, p.period_month - 1).toLocaleString('en', { month: 'long', year: 'numeric' })}
+                          datePaid={p.paid_at ? new Date(p.paid_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
+                          method={p.payment_channel === 'toyyibpay' ? 'Online - FPX (toyyibPay)' : 'Recorded by owner'}
+                          reference={p.toyyibpay_ref_no ?? ''}
+                        />
                       </div>
                     )}
                   </div>
@@ -167,4 +173,5 @@ type PaymentRow = {
   period_year: number; period_month: number;
   due_date: string; amount_due: number; amount_paid: number; paid_at: string | null;
   payment_channel?: string | null;
+  toyyibpay_ref_no?: string | null;
 };

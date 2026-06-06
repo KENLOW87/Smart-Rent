@@ -1,7 +1,7 @@
 import { redirect, notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { displayStatus } from '@/lib/payment-status';
-import ReceiptActions from './ReceiptActions';
+import ReceiptActions from '../../ReceiptActions';
 
 export default async function ReceiptPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

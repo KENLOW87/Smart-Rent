@@ -72,11 +72,11 @@ export default function ReceiptActions(props: Props) {
   const fileName =
     `SmartRent-Receipt-${props.property}-${props.period}`.replace(/[^a-zA-Z0-9-]/g, '_') + '.pdf';
 
-  async function download() {
+  async function viewPdf() {
     setBusy(true);
     try {
       const doc = await buildPdf(props);
-      doc.save(fileName);
+      window.open(String(doc.output('bloburl')), '_blank');
     } finally {
       setBusy(false);
     }
@@ -100,20 +100,20 @@ export default function ReceiptActions(props: Props) {
         alert('Receipt downloaded. Open WhatsApp and attach it to send to your landlord.');
       }
     } catch {
-      // user cancelled the share sheet — ignore
+      // share sheet cancelled — ignore
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="flex gap-2 mt-4 w-full max-w-sm">
-      <button onClick={download} disabled={busy}
-        className="flex-1 text-sm border border-slate-300 text-slate-700 py-2.5 rounded-lg font-medium disabled:opacity-50">
-        ⬇ Download PDF
+    <div className="flex gap-2">
+      <button onClick={viewPdf} disabled={busy} title="View / download PDF receipt"
+        className="px-3 py-2 text-sm border border-slate-300 text-slate-700 rounded-lg font-medium disabled:opacity-50">
+        📄 PDF
       </button>
       <button onClick={share} disabled={busy}
-        className="flex-1 text-sm bg-emerald-500 text-white py-2.5 rounded-lg font-medium disabled:opacity-50">
+        className="flex-1 inline-flex items-center justify-center gap-1 text-sm bg-emerald-500 text-white py-2 rounded-lg font-medium disabled:opacity-50">
         💬 WhatsApp
       </button>
     </div>
