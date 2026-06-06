@@ -4,6 +4,9 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import LogoutButton from '../dashboard/LogoutButton';
 import PayButton from './PayButton';
 import ReceiptActions from './ReceiptActions';
+import SlipUpload from './SlipUpload';
+import SlipActions from './SlipActions';
+import { getSlipUrls } from '@/lib/slips';
 import { displayStatus, daysLate, STATUS_META } from '@/lib/payment-status';
 
 export default async function TenantHome() {
@@ -28,6 +31,7 @@ export default async function TenantHome() {
     .limit(12);
 
   const today = new Date().toISOString().slice(0, 10);
+  const slipUrls = await getSlipUrls((payments ?? []).map((p) => p.id));
 
   // Bank details come from the property OWNER's profile (each owner's tenants see
   // that owner's bank). Falls back to the global env defaults if not set.
@@ -96,6 +100,8 @@ export default async function TenantHome() {
                 const meta = STATUS_META[dstatus];
                 const lateDays = dstatus === 'paid_late' && p.paid_at ? daysLate(p.paid_at, p.due_date) : 0;
                 const fullyPaid = dstatus === 'paid' || dstatus === 'paid_late';
+                const slip = slipUrls.get(p.id);
+                const monthLabel = new Date(p.period_year, p.period_month - 1).toLocaleString('en', { month: 'long', year: 'numeric' });
                 return (
                   <div key={p.id} className="bg-white border border-slate-200 rounded-2xl p-4">
                     <div className="flex justify-between items-start">
@@ -149,23 +155,30 @@ export default async function TenantHome() {
                             </details>
                           </>
                         )}
+                        <SlipUpload paymentId={p.id} />
                       </div>
                     ) : (
                       <div className="mt-3 space-y-2">
-                        {p.payment_channel === 'toyyibpay' && (
-                          <p className="text-[11px] text-emerald-600 text-center">
-                            ✓ Paid online via toyyibPay
-                          </p>
+                        {slip ? (
+                          <SlipActions url={slip} caption={`Bank-in slip — ${tenant.properties?.name ?? ''} ${monthLabel}`} />
+                        ) : (
+                          <>
+                            {p.payment_channel === 'toyyibpay' && (
+                              <p className="text-[11px] text-emerald-600 text-center">
+                                ✓ Paid online via toyyibPay
+                              </p>
+                            )}
+                            <ReceiptActions
+                              amount={Number(p.amount_paid || p.amount_due).toFixed(2)}
+                              tenant={tenant.full_name}
+                              property={tenant.properties?.name ?? ''}
+                              period={monthLabel}
+                              datePaid={p.paid_at ? new Date(p.paid_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
+                              method={p.payment_channel === 'toyyibpay' ? 'Online - FPX (toyyibPay)' : 'Recorded by owner'}
+                              reference={p.toyyibpay_ref_no ?? ''}
+                            />
+                          </>
                         )}
-                        <ReceiptActions
-                          amount={Number(p.amount_paid || p.amount_due).toFixed(2)}
-                          tenant={tenant.full_name}
-                          property={tenant.properties?.name ?? ''}
-                          period={new Date(p.period_year, p.period_month - 1).toLocaleString('en', { month: 'long', year: 'numeric' })}
-                          datePaid={p.paid_at ? new Date(p.paid_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
-                          method={p.payment_channel === 'toyyibpay' ? 'Online - FPX (toyyibPay)' : 'Recorded by owner'}
-                          reference={p.toyyibpay_ref_no ?? ''}
-                        />
                       </div>
                     )}
                   </div>

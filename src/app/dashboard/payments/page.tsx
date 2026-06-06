@@ -2,16 +2,16 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { displayStatus, daysLate, STATUS_META } from '@/lib/payment-status';
 import PeriodPicker from './PeriodPicker';
-import ReceiptActions from '../../tenant/ReceiptActions';
+import { getSlipUrls } from '@/lib/slips';
 
-// WhatsApp reminder to chase a tenant for unpaid / partial rent.
-function waChase(name: string, phone: string, property: string, month: string, outstanding: number) {
+// WhatsApp the tenant: a reminder if rent is outstanding, a thank-you if settled.
+function waTenant(name: string, phone: string, property: string, month: string, outstanding: number) {
   const digits = phone.replace(/\D/g, '');
   const intl = digits.startsWith('60') ? digits : digits.startsWith('0') ? '60' + digits.slice(1) : '60' + digits;
-  const msg =
-    `Hi ${name}, a friendly reminder for your rent at ${property} (${month}).\n` +
-    `Outstanding: RM ${outstanding.toFixed(0)}.\n` +
-    `Kindly settle as soon as possible. Thank you. \u{1F64F}`;
+  const msg = outstanding > 0
+    ? `Hi ${name}, a reminder for your rent at ${property} (${month}).\n` +
+      `Outstanding: RM ${outstanding.toFixed(0)}.\nKindly settle as soon as possible. Thank you. \u{1F64F}`
+    : `Hi ${name}, we have received your rent for ${property} (${month}). Thank you! \u{1F64F}`;
   return `https://wa.me/${intl}?text=${encodeURIComponent(msg)}`;
 }
 
@@ -64,6 +64,7 @@ export default async function PaymentsPage({
     .order('due_date');
 
   const payments = (rawPayments ?? []).filter((p) => filter === 'all' || displayStatus(p, today) === filter);
+  const slipUrls = await getSlipUrls(payments.map((p) => p.id));
 
   const monthLabel = new Date(year, month - 1).toLocaleString('en', { month: 'long', year: 'numeric' });
   const chips = [
@@ -104,6 +105,7 @@ export default async function PaymentsPage({
           const fullyPaid = dstatus === 'paid' || dstatus === 'paid_late';
           const outstanding = Number(p.amount_due) - Number(p.amount_paid);
           const periodLabel = new Date(p.period_year, p.period_month - 1).toLocaleString('en', { month: 'long', year: 'numeric' });
+          const slip = slipUrls.get(p.id);
           return (
             <div key={p.id} className="bg-white border border-slate-200 rounded-2xl p-4">
               <div className="flex justify-between items-start">
@@ -133,25 +135,21 @@ export default async function PaymentsPage({
                 </div>
               </div>
 
-              <div className="mt-3 border-t border-slate-100 pt-3">
-                {fullyPaid ? (
-                  <ReceiptActions hideShare
-                    amount={Number(p.amount_paid || p.amount_due).toFixed(2)}
-                    tenant={p.tenants?.full_name ?? ''}
-                    property={p.properties?.name ?? ''}
-                    period={periodLabel}
-                    datePaid={p.paid_at ? new Date(p.paid_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
-                    method={p.payment_channel === 'toyyibpay' ? 'Online - FPX (toyyibPay)' : 'Recorded by owner'}
-                    reference={p.toyyibpay_ref_no ?? ''}
-                  />
-                ) : p.tenants?.phone ? (
-                  <a href={waChase(p.tenants.full_name, p.tenants.phone, p.properties?.name ?? '', periodLabel, outstanding)}
-                    target="_blank" rel="noopener noreferrer"
-                    className="block text-center text-sm bg-emerald-500 text-white py-2.5 rounded-lg font-medium">
-                    💬 WhatsApp tenant (remind)
+              <div className="mt-3 border-t border-slate-100 pt-3 flex gap-2">
+                {slip ? (
+                  <a href={slip} target="_blank" rel="noopener noreferrer"
+                    className="flex-1 text-center text-sm border border-slate-300 text-slate-700 py-2.5 rounded-lg font-medium">
+                    📄 View slip
                   </a>
                 ) : (
-                  <p className="text-xs text-slate-400 text-center">No tenant phone to remind.</p>
+                  <span className="flex-1 text-center text-xs text-slate-400 self-center">No bank-in slip</span>
+                )}
+                {p.tenants?.phone && (
+                  <a href={waTenant(p.tenants.full_name, p.tenants.phone, p.properties?.name ?? '', periodLabel, outstanding)}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex-1 text-center text-sm bg-emerald-500 text-white py-2.5 rounded-lg font-medium">
+                    💬 WhatsApp
+                  </a>
                 )}
               </div>
             </div>

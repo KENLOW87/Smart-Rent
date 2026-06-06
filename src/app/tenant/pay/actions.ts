@@ -1,5 +1,6 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createBill, billPaymentUrl } from '@/lib/toyyibpay';
@@ -73,4 +74,53 @@ export async function startPayment(paymentId: string): Promise<{ url?: string; e
     }
     return { error: msg };
   }
+}
+
+// Tenant uploads a bank-in slip for a month -> stores the file, attaches it as a
+// payment proof, and marks the month paid (manual transfer). The owner reviews it.
+export async function uploadSlip(paymentId: string, formData: FormData): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Please sign in again.' };
+
+  const file = formData.get('slip');
+  if (!(file instanceof File) || file.size === 0) return { error: 'No file selected.' };
+  if (file.size > 10 * 1024 * 1024) return { error: 'File too large (max 10MB).' };
+
+  const admin = createAdminClient();
+  const { data: pay } = await admin
+    .from('payments').select('id, amount_due, tenant_id').eq('id', paymentId).maybeSingle();
+  if (!pay) return { error: 'Payment not found.' };
+
+  const { data: t } = await admin
+    .from('tenants').select('profile_id').eq('id', pay.tenant_id).maybeSingle();
+  if (t?.profile_id !== user.id) return { error: 'This payment is not linked to your account.' };
+
+  const ext = (file.name.split('.').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+    || (file.type.includes('pdf') ? 'pdf' : 'jpg');
+  const path = `${paymentId}/slip-${Date.now()}.${ext}`;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+
+  const { error: upErr } = await admin.storage
+    .from('payment-proofs')
+    .upload(path, bytes, { contentType: file.type || 'application/octet-stream', upsert: true });
+  if (upErr) return { error: 'Upload failed: ' + upErr.message };
+
+  await admin.from('payment_proofs').insert({
+    payment_id: paymentId,
+    uploaded_by: user.id,
+    file_path: path,
+    mime_type: file.type || 'application/octet-stream',
+  });
+
+  await admin.from('payments').update({
+    amount_paid: pay.amount_due,
+    paid_at: new Date().toISOString(),
+    status: 'paid',
+    payment_channel: 'manual',
+  }).eq('id', paymentId);
+
+  revalidatePath('/tenant');
+  revalidatePath('/dashboard/payments');
+  return {};
 }
