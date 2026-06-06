@@ -104,6 +104,7 @@ export default async function PropertiesPage() {
                   {(ob?.bank_name || ob?.bank_account_no) && (
                     <p className="text-[11px] text-slate-400 mt-0.5">
                       🏦 {ob?.bank_name} · {ob?.bank_account_no}
+                      {ob?.bank_account_name ? ` · ${ob.bank_account_name}` : ''}
                     </p>
                   )}
                 </div>
