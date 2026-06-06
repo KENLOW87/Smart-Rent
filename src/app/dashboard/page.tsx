@@ -15,6 +15,19 @@ export default async function DashboardHome() {
     supabase.from('payments').select('*').eq('period_year', year).eq('period_month', month),
   ]);
 
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: me } = await supabase
+    .from('profiles').select('role').eq('id', user?.id ?? '').maybeSingle();
+  const isOwner = me?.role === 'owner';
+
+  const site = process.env.NEXT_PUBLIC_SITE_URL || 'https://smart-rent-wheat.vercel.app';
+  const inviteMsg =
+    `Hi \u{1F44B} You're invited to help manage our rentals on Smart Rent.\n` +
+    `\u{1F449} Open: ${site}\n` +
+    `Tap "Owner: create an account" and sign up with your email + a password.\n` +
+    `Once done, tell me and I'll switch on your access. \u{1F4F2}`;
+  const inviteLink = `https://wa.me/?text=${encodeURIComponent(inviteMsg)}`;
+
   const occupiedPropertyIds = new Set((tenants ?? []).map((t) => t.property_id));
   const totalUnits = properties?.length ?? 0;
   const occupied = occupiedPropertyIds.size;
@@ -80,6 +93,13 @@ export default async function DashboardHome() {
         <StatusButton tone="red" label="Overdue" count={overdueList.length} amount={overdueAmount}
           href="/dashboard/payments?filter=overdue" />
       </div>
+
+      {isOwner && (
+        <a href={inviteLink} target="_blank" rel="noopener noreferrer"
+          className="flex items-center justify-center gap-2 text-sm bg-emerald-500 text-white py-2.5 rounded-xl font-medium">
+          💬 Invite Owner
+        </a>
+      )}
 
       <section>
         <div className="flex items-center justify-between mb-2 px-1">
