@@ -23,6 +23,10 @@ export default function InstallPrompt() {
     if (standalone) return; // already installed
 
     const ua = window.navigator.userAgent.toLowerCase();
+    // Must run post-hydration: navigator is unavailable during SSR, and a lazy
+    // useState initializer would render the iOS banner on the client only,
+    // causing a hydration mismatch. The one-time setState here is intentional.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (/iphone|ipad|ipod/.test(ua)) setIosHint(true);
 
     const onPrompt = (e: Event) => {
